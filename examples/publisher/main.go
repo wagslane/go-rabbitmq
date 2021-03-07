@@ -7,18 +7,25 @@ import (
 )
 
 func main() {
-	publisher, returns, err := rabbitmq.GetPublisher("amqp://user:pass@localhost", true)
+	publisher, returns, err := rabbitmq.GetPublisher(
+		"amqp://user:pass@localhost",
+		// can pass nothing for no logging
+		func(opts *rabbitmq.PublisherOptions) {
+			opts.Logging = true
+		},
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	err = publisher.Publish(
 		[]byte("hello, world"),
-		// leave nil for defaults
-		&rabbitmq.PublishOptions{
-			Exchange:  "events",
-			Mandatory: true,
+		[]string{"routing_key"},
+		// leave blank for defaults
+		func(opts *rabbitmq.PublishOptions) {
+			opts.DeliveryMode = rabbitmq.Persistent
+			opts.Mandatory = true
+			opts.ContentType = "application/json"
 		},
-		"routing_key",
 	)
 	if err != nil {
 		log.Fatal(err)

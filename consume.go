@@ -1,7 +1,6 @@
 package rabbitmq
 
 import (
-	"log"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -13,6 +12,12 @@ type Consumer struct {
 	logger    logger
 }
 
+// ConsumerOptions are used to describe a consumer's configuration.
+// Logging set to true will enable the consumer to print to stdout
+type ConsumerOptions struct {
+	Logging bool
+}
+
 // Delivery captures the fields for a previously delivered message resident in
 // a queue to be delivered by the server to a consumer from Channel.Consume or
 // Channel.Get.
@@ -20,57 +25,20 @@ type Delivery struct {
 	amqp.Delivery
 }
 
-// ConsumeOptions are used to describe how a new consumer will be created.
-type ConsumeOptions struct {
-	QueueOptions    QueueOptions
-	BindingOptions  BindingOptions
-	QosOptions      QosOptions
-	ConsumerOptions ConsumerOptions
-	Logging         bool
-}
-
-// QueueOptions -
-type QueueOptions struct {
-	Durable    bool
-	AutoDelete bool
-	Exclusive  bool
-	NoWait     bool
-	Args       Table
-}
-
-// BindingOptions -
-type BindingOptions struct {
-	Exchange string
-	NoWait   bool
-	Args     Table
-}
-
-// QosOptions -
-type QosOptions struct {
-	Concurrency int
-	Prefetch    int
-	Global      bool
-}
-
-// ConsumerOptions -
-type ConsumerOptions struct {
-	Name      string
-	AutoAck   bool
-	Exclusive bool
-	NoWait    bool
-	NoLocal   bool
-	Args      Table
-}
-
 // GetConsumer returns a new Consumer connected to the given rabbitmq server
-func GetConsumer(url string, logging bool) (Consumer, error) {
-	chManager, err := newChannelManager(url, logging)
+func GetConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
+	options := &ConsumerOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+
+	chManager, err := newChannelManager(url, options.Logging)
 	if err != nil {
 		return Consumer{}, err
 	}
 	consumer := Consumer{
 		chManager: chManager,
-		logger:    logger{logging: logging},
+		logger:    logger{logging: options.Logging},
 	}
 	return consumer, nil
 }
@@ -78,66 +46,71 @@ func GetConsumer(url string, logging bool) (Consumer, error) {
 // getDefaultConsumeOptions descibes the options that will be used when a value isn't provided
 func getDefaultConsumeOptions() ConsumeOptions {
 	return ConsumeOptions{
-		QueueOptions: QueueOptions{
-			Durable:    false,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Args:       nil,
-		},
-		BindingOptions: BindingOptions{
-			Exchange: "",
-			NoWait:   false,
-			Args:     nil,
-		},
-		QosOptions: QosOptions{
-			Concurrency: 1,
-			Prefetch:    10,
-			Global:      false,
-		},
-		ConsumerOptions: ConsumerOptions{
-			Name:      "",
-			AutoAck:   false,
-			Exclusive: false,
-			NoWait:    false,
-			NoLocal:   false,
-			Args:      nil,
-		},
+		QueueDurable:      false,
+		QueueAutoDelete:   false,
+		QueueExclusive:    false,
+		QueueNoWait:       false,
+		QueueArgs:         nil,
+		BindingExchange:   "",
+		BindingNoWait:     false,
+		BindingArgs:       nil,
+		Concurrency:       1,
+		QOSPrefetch:       0,
+		QOSGlobal:         false,
+		ConsumerName:      "",
+		ConsumerAutoAck:   false,
+		ConsumerExclusive: false,
+		ConsumerNoWait:    false,
+		ConsumerNoLocal:   false,
+		ConsumerArgs:      nil,
 	}
 }
 
-// fillInConsumeDefaults -
-func fillInConsumeDefaults(consumeOptions ConsumeOptions) ConsumeOptions {
-	defaults := getDefaultConsumeOptions()
-	if consumeOptions.QosOptions.Concurrency < 1 {
-		consumeOptions.QosOptions.Concurrency = defaults.QosOptions.Concurrency
-	}
-	return consumeOptions
+// ConsumeOptions are used to describe how a new consumer will be created.
+type ConsumeOptions struct {
+	QueueDurable      bool
+	QueueAutoDelete   bool
+	QueueExclusive    bool
+	QueueNoWait       bool
+	QueueArgs         Table
+	BindingExchange   string
+	BindingNoWait     bool
+	BindingArgs       Table
+	Concurrency       int
+	QOSPrefetch       int
+	QOSGlobal         bool
+	ConsumerName      string
+	ConsumerAutoAck   bool
+	ConsumerExclusive bool
+	ConsumerNoWait    bool
+	ConsumerNoLocal   bool
+	ConsumerArgs      Table
 }
 
-// StartConsumers starts n goroutines where n="ConsumeOptions.QosOptions.Concurrency".
+// StartConsuming starts n goroutines where n="ConsumeOptions.QosOptions.Concurrency".
 // Each goroutine spawns a handler that consumes off of the qiven queue which binds to the routing key(s).
 // The provided handler is called once for each message. If the provided queue doesn't exist, it
 // will be created on the cluster
-func (consumer Consumer) StartConsumers(
+func (consumer Consumer) StartConsuming(
 	handler func(d Delivery) bool,
-	consumeOptions *ConsumeOptions,
 	queue string,
-	routingKeys ...string,
+	routingKeys []string,
+	optionFuncs ...func(*ConsumeOptions),
 ) error {
-	defaults := getDefaultConsumeOptions()
-	finalOptions := ConsumeOptions{}
-	if consumeOptions == nil {
-		finalOptions = defaults
-	} else {
-		finalOptions = fillInConsumeDefaults(*consumeOptions)
+	defaultOptions := getDefaultConsumeOptions()
+	options := &ConsumeOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+	if options.Concurrency < 1 {
+		options.Concurrency = defaultOptions.Concurrency
 	}
 
 	err := consumer.startGoroutines(
 		handler,
-		finalOptions,
 		queue,
-		routingKeys...,
+		routingKeys,
+		*options,
 	)
 	if err != nil {
 		return err
@@ -148,9 +121,9 @@ func (consumer Consumer) StartConsumers(
 			consumer.logger.Printf("consume cancel/close handler triggered. err: %v", err)
 			consumer.startGoroutinesWithRetries(
 				handler,
-				finalOptions,
 				queue,
-				routingKeys...,
+				routingKeys,
+				*options,
 			)
 		}
 	}()
@@ -161,9 +134,9 @@ func (consumer Consumer) StartConsumers(
 // with an exponential backoff
 func (consumer Consumer) startGoroutinesWithRetries(
 	handler func(d Delivery) bool,
-	consumeOptions ConsumeOptions,
 	queue string,
-	routingKeys ...string,
+	routingKeys []string,
+	consumeOptions ConsumeOptions,
 ) {
 	backoffTime := time.Second
 	for {
@@ -172,9 +145,9 @@ func (consumer Consumer) startGoroutinesWithRetries(
 		backoffTime *= 2
 		err := consumer.startGoroutines(
 			handler,
-			consumeOptions,
 			queue,
-			routingKeys...,
+			routingKeys,
+			consumeOptions,
 		)
 		if err != nil {
 			consumer.logger.Printf("couldn't start consumer goroutines. err: %v", err)
@@ -189,20 +162,20 @@ func (consumer Consumer) startGoroutinesWithRetries(
 // that will consume from the queue
 func (consumer Consumer) startGoroutines(
 	handler func(d Delivery) bool,
-	consumeOptions ConsumeOptions,
 	queue string,
-	routingKeys ...string,
+	routingKeys []string,
+	consumeOptions ConsumeOptions,
 ) error {
 	consumer.chManager.channelMux.RLock()
 	defer consumer.chManager.channelMux.RUnlock()
 
 	_, err := consumer.chManager.channel.QueueDeclare(
 		queue,
-		consumeOptions.QueueOptions.Durable,
-		consumeOptions.QueueOptions.AutoDelete,
-		consumeOptions.QueueOptions.Exclusive,
-		consumeOptions.QueueOptions.NoWait,
-		tableToAMQPTable(consumeOptions.QueueOptions.Args),
+		consumeOptions.QueueDurable,
+		consumeOptions.QueueAutoDelete,
+		consumeOptions.QueueExclusive,
+		consumeOptions.QueueNoWait,
+		tableToAMQPTable(consumeOptions.QueueArgs),
 	)
 	if err != nil {
 		return err
@@ -212,9 +185,9 @@ func (consumer Consumer) startGoroutines(
 		err = consumer.chManager.channel.QueueBind(
 			queue,
 			routingKey,
-			consumeOptions.BindingOptions.Exchange,
-			consumeOptions.BindingOptions.NoWait,
-			tableToAMQPTable(consumeOptions.BindingOptions.Args),
+			consumeOptions.BindingExchange,
+			consumeOptions.BindingNoWait,
+			tableToAMQPTable(consumeOptions.BindingArgs),
 		)
 		if err != nil {
 			return err
@@ -222,9 +195,9 @@ func (consumer Consumer) startGoroutines(
 	}
 
 	err = consumer.chManager.channel.Qos(
-		consumeOptions.QosOptions.Prefetch,
+		consumeOptions.QOSPrefetch,
 		0,
-		consumeOptions.QosOptions.Global,
+		consumeOptions.QOSGlobal,
 	)
 	if err != nil {
 		return err
@@ -232,21 +205,21 @@ func (consumer Consumer) startGoroutines(
 
 	msgs, err := consumer.chManager.channel.Consume(
 		queue,
-		consumeOptions.ConsumerOptions.Name,
-		consumeOptions.ConsumerOptions.AutoAck,
-		consumeOptions.ConsumerOptions.Exclusive,
-		consumeOptions.ConsumerOptions.NoLocal, // no-local is not supported by RabbitMQ
-		consumeOptions.ConsumerOptions.NoWait,
-		tableToAMQPTable(consumeOptions.ConsumerOptions.Args),
+		consumeOptions.ConsumerName,
+		consumeOptions.ConsumerAutoAck,
+		consumeOptions.ConsumerExclusive,
+		consumeOptions.ConsumerNoLocal, // no-local is not supported by RabbitMQ
+		consumeOptions.ConsumerNoWait,
+		tableToAMQPTable(consumeOptions.ConsumerArgs),
 	)
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < consumeOptions.QosOptions.Concurrency; i++ {
+	for i := 0; i < consumeOptions.Concurrency; i++ {
 		go func() {
 			for msg := range msgs {
-				if consumeOptions.ConsumerOptions.AutoAck {
+				if consumeOptions.ConsumerAutoAck {
 					handler(Delivery{msg})
 					continue
 				}
@@ -256,9 +229,9 @@ func (consumer Consumer) startGoroutines(
 					msg.Nack(false, true)
 				}
 			}
-			log.Println("rabbit consumer goroutine closed")
+			consumer.logger.Println("rabbit consumer goroutine closed")
 		}()
 	}
-	log.Printf("Processing messages on %v goroutines", consumeOptions.QosOptions.Concurrency)
+	consumer.logger.Printf("Processing messages on %v goroutines", consumeOptions.Concurrency)
 	return nil
 }
