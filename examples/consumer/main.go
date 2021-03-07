@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	consumer, err := rabbitmq.GetConsumer(
+	consumer, err := rabbitmq.NewConsumer(
 		"amqp://user:pass@localhost",
 		// can pass nothing for no logging
 		func(opts *rabbitmq.ConsumerOptions) {

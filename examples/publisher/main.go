@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	publisher, returns, err := rabbitmq.GetPublisher(
+	publisher, returns, err := rabbitmq.NewPublisher(
 		"amqp://user:pass@localhost",
 		// can pass nothing for no logging
 		func(opts *rabbitmq.PublisherOptions) {

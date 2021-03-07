@@ -60,12 +60,12 @@ type PublisherOptions struct {
 	Logging bool
 }
 
-// GetPublisher returns a new publisher with an open channel to the cluster.
+// NewPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func GetPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
+func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
 	options := &PublisherOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)

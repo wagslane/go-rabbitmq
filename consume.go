@@ -25,8 +25,8 @@ type Delivery struct {
 	amqp.Delivery
 }
 
-// GetConsumer returns a new Consumer connected to the given rabbitmq server
-func GetConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
+// NewConsumer returns a new Consumer connected to the given rabbitmq server
+func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
 	options := &ConsumerOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
