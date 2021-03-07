@@ -7,29 +7,30 @@ import (
 )
 
 func main() {
-	consumer, err := rabbitmq.GetConsumer("amqp://user:pass@localhost", true)
+	consumer, err := rabbitmq.GetConsumer(
+		"amqp://user:pass@localhost",
+		// can pass nothing for no logging
+		func(opts *rabbitmq.ConsumerOptions) {
+			opts.Logging = true
+		},
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = consumer.StartConsumers(
+	err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) bool {
 			log.Printf("consumed: %v", string(d.Body))
-
 			// true to ACK, false to NACK
 			return true
 		},
-		// can pass nil here for defaults
-		&rabbitmq.ConsumeOptions{
-			QueueOptions: rabbitmq.QueueOptions{
-				Durable: true,
-			},
-			QosOptions: rabbitmq.QosOptions{
-				Concurrency: 10,
-				Prefetch:    100,
-			},
-		},
 		"my_queue",
-		"routing_key1", "routing_key2",
+		[]string{"routing_key1", "routing_key2"},
+		// can pass nothing here for defaults
+		func(opts *rabbitmq.ConsumeOptions) {
+			opts.QueueDurable = true
+			opts.Concurrency = 10
+			opts.QOSPrefetch = 100
+		},
 	)
 	if err != nil {
 		log.Fatal(err)

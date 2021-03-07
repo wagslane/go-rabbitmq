@@ -54,13 +54,24 @@ type Publisher struct {
 	logger logger
 }
 
+// PublisherOptions are used to describe a publisher's configuration.
+// Logging set to true will enable the consumer to print to stdout
+type PublisherOptions struct {
+	Logging bool
+}
+
 // GetPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func GetPublisher(url string, logging bool) (Publisher, <-chan Return, error) {
-	chManager, err := newChannelManager(url, logging)
+func GetPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
+	options := &PublisherOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+
+	chManager, err := newChannelManager(url, options.Logging)
 	if err != nil {
 		return Publisher{}, nil, err
 	}
@@ -70,6 +81,7 @@ func GetPublisher(url string, logging bool) (Publisher, <-chan Return, error) {
 		notifyFlowChan:             make(chan bool),
 		disablePublishDueToFlow:    false,
 		disablePublishDueToFlowMux: &sync.RWMutex{},
+		logger:                     logger{logging: options.Logging},
 	}
 
 	returnAMQPChan := make(chan amqp.Return)
@@ -91,48 +103,41 @@ func GetPublisher(url string, logging bool) (Publisher, <-chan Return, error) {
 }
 
 // Publish publishes the provided data to the given routing keys over the connection
-func (publisher *Publisher) Publish(data []byte, publishOptions *PublishOptions, routingKeys ...string) error {
+func (publisher *Publisher) Publish(
+	data []byte,
+	routingKeys []string,
+	optionFuncs ...func(*PublishOptions),
+) error {
 	publisher.disablePublishDueToFlowMux.RLock()
 	if publisher.disablePublishDueToFlow {
 		return fmt.Errorf("publishing blocked due to high flow on the server")
 	}
 	publisher.disablePublishDueToFlowMux.RUnlock()
 
-	defaults := getDefaultPublishOptions()
-	finalOptions := PublishOptions{}
-	if publishOptions == nil {
-		finalOptions = defaults
-	} else {
-		finalOptions = fillInPublishDefaults(*publishOptions)
+	options := &PublishOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+	if options.DeliveryMode == 0 {
+		options.DeliveryMode = Transient
 	}
 
 	for _, routingKey := range routingKeys {
 		err := publisher.chManager.channel.Publish(
-			finalOptions.Exchange,
+			options.Exchange,
 			routingKey,
-			finalOptions.Mandatory,
-			finalOptions.Immediate,
+			options.Mandatory,
+			options.Immediate,
 			amqp.Publishing{
-				ContentType:  finalOptions.ContentType,
+				ContentType:  options.ContentType,
 				Body:         data,
-				DeliveryMode: finalOptions.DeliveryMode,
+				DeliveryMode: options.DeliveryMode,
 			})
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// getDefaultPublishOptions -
-func getDefaultPublishOptions() PublishOptions {
-	return PublishOptions{
-		Exchange:     "",
-		Mandatory:    false,
-		Immediate:    false,
-		ContentType:  "",
-		DeliveryMode: Transient,
-	}
 }
 
 func (publisher *Publisher) startNotifyFlowHandler() {
@@ -147,13 +152,4 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 		publisher.disablePublishDueToFlowMux.Unlock()
 		publisher.logger.Println("resuming publishing due to flow request from server")
 	}
-}
-
-// fillInPublishDefaults completes in any fields we're sure weren't set with their defaults
-func fillInPublishDefaults(publishOptions PublishOptions) PublishOptions {
-	defaults := getDefaultPublishOptions()
-	if publishOptions.DeliveryMode == 0 {
-		publishOptions.DeliveryMode = defaults.DeliveryMode
-	}
-	return publishOptions
 }

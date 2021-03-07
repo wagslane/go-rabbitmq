@@ -28,50 +28,62 @@ go get github.com/wagslane/go-rabbitmq
 ## 🚀 Quick Start Consumer
 
 ```go
-consumer, err := rabbitmq.GetConsumer("amqp://user:pass@localhost", true)
-if err != nil {
-    log.Fatal(err)
-}
-err = consumer.StartConsumers(
-    func(d rabbitmq.Delivery) bool {
-        log.Printf("consumed: %v", string(d.Body))
-
-        // true to ACK, false to NACK
-        return true
+consumer, err := rabbitmq.GetConsumer(
+    "amqp://user:pass@localhost",
+    // can pass nothing for no logging
+    func(opts *rabbitmq.ConsumerOptions) {
+        opts.Logging = true
     },
-    // can pass nil here for defaults
-    &rabbitmq.ConsumeOptions{
-        QueueOptions: rabbitmq.QueueOptions{
-            Durable: true,
-        },
-        QosOptions: rabbitmq.QosOptions{
-            Concurrency: 10,
-            Prefetch:    100,
-        },
-    },
-    "my_queue",
-    "routing_key1", "routing_key2",
 )
 if err != nil {
     log.Fatal(err)
 }
+err = consumer.StartConsuming(
+    func(d rabbitmq.Delivery) bool {
+        log.Printf("consumed: %v", string(d.Body))
+        // true to ACK, false to NACK
+        return true
+    },
+    "my_queue",
+    []string{"routing_key1", "routing_key2"},
+    // can pass nothing here for defaults
+    func(opts *rabbitmq.ConsumeOptions) {
+        opts.QueueDurable = true
+        opts.Concurrency = 10
+        opts.QOSPrefetch = 100
+    },
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// block main thread so consumers run forever
+forever := make(chan struct{})
+<-forever
 ```
 
 ## 🚀 Quick Start Publisher
 
 ```go
-publisher, returns, err := rabbitmq.GetPublisher("amqp://user:pass@localhost", true)
+publisher, returns, err := rabbitmq.GetPublisher(
+    "amqp://user:pass@localhost",
+    // can pass nothing for no logging
+    func(opts *rabbitmq.PublisherOptions) {
+        opts.Logging = true
+    },
+)
 if err != nil {
     log.Fatal(err)
 }
 err = publisher.Publish(
     []byte("hello, world"),
-    // leave nil for defaults
-    &rabbitmq.PublishOptions{
-        Exchange:  "events",
-        Mandatory: true,
+    []string{"routing_key"},
+    // leave blank for defaults
+    func(opts *rabbitmq.PublishOptions) {
+        opts.DeliveryMode = rabbitmq.Persistent
+        opts.Mandatory = true
+        opts.ContentType = "application/json"
     },
-    "routing_key",
 )
 if err != nil {
     log.Fatal(err)
