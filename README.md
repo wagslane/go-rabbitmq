@@ -4,6 +4,8 @@ Wrapper of streadway/amqp that provides reconnection logic and sane defaults. Hi
 
 Supported by [Qvault](https://qvault.io)
 
+[![](https://godoc.org/github.com/wagslane/go-rabbitmq?status.svg)](https://godoc.org/github.com/wagslane/go-rabbitmq)
+
 ## Motivation
 
 [Streadway's AMQP](https://github.com/streadway/amqp) library is currently the most robust and well-supported Go client I'm aware of. It's a fantastic option and I recommend starting there and seeing if it fulfills your needs. Their project has made an effort to stay within the scope of the AMQP protocol, as such, no reconnection logic and few ease-of-use abstractions are provided.
