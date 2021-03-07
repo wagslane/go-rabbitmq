@@ -92,7 +92,7 @@ Submit an issue (above in the issues tab)
 
 ## Transient Dependencies
 
-* [github.com/streadway/amqp](https://github.com/streadway/amqp) - and that's it.
+My goal is to keep dependencies limited to 1, [github.com/streadway/amqp](https://github.com/streadway/amqp).
 
 ## 👏 Contributing
 
