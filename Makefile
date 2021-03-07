@@ -18,7 +18,7 @@ lint:
 	go list ./... | grep -v /vendor/ | xargs -L1 golint -set_exit_status
 
 install-staticcheck:
-	cd /tmp && go get honnef.co/go/tools/cmd/staticcheck
+	cd /tmp && GOPROXY="" go get honnef.co/go/tools/cmd/staticcheck
 
 staticcheck:
 	staticcheck -f stylish ./...
