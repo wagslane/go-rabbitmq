@@ -4,7 +4,7 @@ Wrapper of streadway/amqp that provides reconnection logic and sane defaults. Hi
 
 Supported by [Qvault](https://qvault.io)
 
-[![](https://godoc.org/github.com/wagslane/go-rabbitmq?status.svg)](https://godoc.org/github.com/wagslane/go-rabbitmq)
+[![](https://godoc.org/github.com/wagslane/go-rabbitmq?status.svg)](https://godoc.org/github.com/wagslane/go-rabbitmq)![Deploy](https://github.com/wagslane/go-rabbitmq/workflows/Tests/badge.svg)
 
 ## Motivation
 
