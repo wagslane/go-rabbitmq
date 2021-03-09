@@ -9,10 +9,7 @@ import (
 func main() {
 	publisher, returns, err := rabbitmq.NewPublisher(
 		"amqp://user:pass@localhost",
-		// can pass nothing for no logging
-		func(opts *rabbitmq.PublisherOptions) {
-			opts.Logging = true
-		},
+		rabbitmq.WithPublisherOptionsLogging,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -20,12 +17,9 @@ func main() {
 	err = publisher.Publish(
 		[]byte("hello, world"),
 		[]string{"routing_key"},
-		// leave blank for defaults
-		func(opts *rabbitmq.PublishOptions) {
-			opts.DeliveryMode = rabbitmq.Persistent
-			opts.Mandatory = true
-			opts.ContentType = "application/json"
-		},
+		rabbitmq.WithPublishOptionsContentType("application/json"),
+		rabbitmq.WithPublishOptionsMandatory,
+		rabbitmq.WithPublishOptionsPersistentDelivery,
 	)
 	if err != nil {
 		log.Fatal(err)

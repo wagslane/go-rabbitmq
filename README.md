@@ -53,10 +53,7 @@ if err != nil {
 ```go
 consumer, err := rabbitmq.NewConsumer(
     "amqp://user:pass@localhost",
-    // can pass nothing for no logging
-    func(opts *rabbitmq.ConsumerOptions) {
-        opts.Logging = true
-    },
+    rabbitmq.WithConsumerOptionsLogging,
 )
 if err != nil {
     log.Fatal(err)
@@ -69,12 +66,9 @@ err = consumer.StartConsuming(
     },
     "my_queue",
     []string{"routing_key1", "routing_key2"},
-    // can pass nothing here for defaults
-    func(opts *rabbitmq.ConsumeOptions) {
-        opts.QueueDurable = true
-        opts.Concurrency = 10
-        opts.QOSPrefetch = 100
-    },
+    rabbitmq.WithConsumeOptionsConcurrency(10),
+    rabbitmq.WithConsumeOptionsQueueDurable,
+    rabbitmq.WithConsumeOptionsQuorum,
 )
 if err != nil {
     log.Fatal(err)
@@ -102,9 +96,7 @@ if err != nil {
 publisher, returns, err := rabbitmq.NewPublisher(
     "amqp://user:pass@localhost",
     // can pass nothing for no logging
-    func(opts *rabbitmq.PublisherOptions) {
-        opts.Logging = true
-    },
+    rabbitmq.WithPublisherOptionsLogging,
 )
 if err != nil {
     log.Fatal(err)
@@ -113,11 +105,9 @@ err = publisher.Publish(
     []byte("hello, world"),
     []string{"routing_key"},
     // leave blank for defaults
-    func(opts *rabbitmq.PublishOptions) {
-        opts.DeliveryMode = rabbitmq.Persistent
-        opts.Mandatory = true
-        opts.ContentType = "application/json"
-    },
+    rabbitmq.WithPublishOptionsContentType("application/json"),
+    rabbitmq.WithPublishOptionsMandatory,
+    rabbitmq.WithPublishOptionsPersistentDelivery,
 )
 if err != nil {
     log.Fatal(err)
