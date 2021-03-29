@@ -8,7 +8,7 @@ import (
 
 func main() {
 	consumer, err := rabbitmq.NewConsumer(
-		"amqp://user:pass@localhost",
+		"amqp://guest:guest@localhost",
 		rabbitmq.WithConsumerOptionsLogging,
 	)
 	if err != nil {
@@ -21,10 +21,11 @@ func main() {
 			return true
 		},
 		"my_queue",
-		[]string{"routing_key1", "routing_key2"},
+		[]string{"routing_key", "routing_key_2"},
 		rabbitmq.WithConsumeOptionsConcurrency(10),
 		rabbitmq.WithConsumeOptionsQueueDurable,
 		rabbitmq.WithConsumeOptionsQuorum,
+		rabbitmq.WithConsumeOptionsBindingExchange("events"),
 	)
 	if err != nil {
 		log.Fatal(err)

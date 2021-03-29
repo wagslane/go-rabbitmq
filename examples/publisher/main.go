@@ -8,7 +8,7 @@ import (
 
 func main() {
 	publisher, returns, err := rabbitmq.NewPublisher(
-		"amqp://user:pass@localhost",
+		"amqp://guest:guest@localhost",
 		rabbitmq.WithPublisherOptionsLogging,
 	)
 	if err != nil {
@@ -20,6 +20,7 @@ func main() {
 		rabbitmq.WithPublishOptionsContentType("application/json"),
 		rabbitmq.WithPublishOptionsMandatory,
 		rabbitmq.WithPublishOptionsPersistentDelivery,
+		rabbitmq.WithPublishOptionsExchange("events"),
 	)
 	if err != nil {
 		log.Fatal(err)

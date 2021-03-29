@@ -285,16 +285,18 @@ func (consumer Consumer) startGoroutines(
 		return err
 	}
 
-	for _, routingKey := range routingKeys {
-		err = consumer.chManager.channel.QueueBind(
-			queue,
-			routingKey,
-			consumeOptions.BindingExchange,
-			consumeOptions.BindingNoWait,
-			tableToAMQPTable(consumeOptions.BindingArgs),
-		)
-		if err != nil {
-			return err
+	if consumeOptions.BindingExchange != "" {
+		for _, routingKey := range routingKeys {
+			err = consumer.chManager.channel.QueueBind(
+				queue,
+				routingKey,
+				consumeOptions.BindingExchange,
+				consumeOptions.BindingNoWait,
+				tableToAMQPTable(consumeOptions.BindingArgs),
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
