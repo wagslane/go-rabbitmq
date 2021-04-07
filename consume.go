@@ -9,13 +9,15 @@ import (
 // Consumer allows you to create and connect to queues for data consumption.
 type Consumer struct {
 	chManager *channelManager
-	logger    logger
+	logger    Logger
 }
 
 // ConsumerOptions are used to describe a consumer's configuration.
 // Logging set to true will enable the consumer to print to stdout
+// Logger specifies a custom Logger interface implementation overruling Logging.
 type ConsumerOptions struct {
 	Logging bool
+	Logger  Logger
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -31,14 +33,17 @@ func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, e
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
+	if options.Logger == nil {
+		options.Logger = &nolog{} // default no logging
+	}
 
-	chManager, err := newChannelManager(url, options.Logging)
+	chManager, err := newChannelManager(url, options.Logger)
 	if err != nil {
 		return Consumer{}, err
 	}
 	consumer := Consumer{
 		chManager: chManager,
-		logger:    logger{logging: options.Logging},
+		logger:    options.Logger,
 	}
 	return consumer, nil
 }
@@ -46,6 +51,16 @@ func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, e
 // WithConsumerOptionsLogging sets logging to true on the consumer options
 func WithConsumerOptionsLogging(options *ConsumerOptions) {
 	options.Logging = true
+	options.Logger = &stdlog{}
+}
+
+// WithConsumerOptionsLogger sets logging to a custom interface.
+// Use WithConsumerOptionsLogging to just log to stdout.
+func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.Logging = true
+		options.Logger = log
+	}
 }
 
 // getDefaultConsumeOptions descibes the options that will be used when a value isn't provided
@@ -330,12 +345,18 @@ func (consumer Consumer) startGoroutines(
 					continue
 				}
 				if handler(Delivery{msg}) {
-					msg.Ack(false)
+					err := msg.Ack(false)
+					if err != nil {
+						consumer.logger.Printf("can't ack message: %v", err)
+					}
 				} else {
-					msg.Nack(false, true)
+					err := msg.Nack(false, true)
+					if err != nil {
+						consumer.logger.Printf("can't nack message: %v", err)
+					}
 				}
 			}
-			consumer.logger.Println("rabbit consumer goroutine closed")
+			consumer.logger.Printf("rabbit consumer goroutine closed")
 		}()
 	}
 	consumer.logger.Printf("Processing messages on %v goroutines", consumeOptions.Concurrency)

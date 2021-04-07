@@ -9,21 +9,21 @@ import (
 )
 
 type channelManager struct {
-	logger              logger
+	logger              Logger
 	url                 string
 	channel             *amqp.Channel
 	channelMux          *sync.RWMutex
 	notifyCancelOrClose chan error
 }
 
-func newChannelManager(url string, logging bool) (*channelManager, error) {
+func newChannelManager(url string, log Logger) (*channelManager, error) {
 	ch, err := getNewChannel(url)
 	if err != nil {
 		return nil, err
 	}
 
 	chManager := channelManager{
-		logger:              logger{logging: logging},
+		logger:              log,
 		url:                 url,
 		channel:             ch,
 		channelMux:          &sync.RWMutex{},
@@ -56,14 +56,14 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 	notifyCancelChan = chManager.channel.NotifyCancel(notifyCancelChan)
 	select {
 	case err := <-notifyCloseChan:
-		chManager.logger.Println("attempting to reconnect to amqp server after close")
+		chManager.logger.Printf("attempting to reconnect to amqp server after close")
 		chManager.reconnectWithBackoff()
-		chManager.logger.Println("successfully reconnected to amqp server after close")
+		chManager.logger.Printf("successfully reconnected to amqp server after close")
 		chManager.notifyCancelOrClose <- err
 	case err := <-notifyCancelChan:
-		chManager.logger.Println("attempting to reconnect to amqp server after cancel")
+		chManager.logger.Printf("attempting to reconnect to amqp server after cancel")
 		chManager.reconnectWithBackoff()
-		chManager.logger.Println("successfully reconnected to amqp server after cancel")
+		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
 	}
 	close(notifyCancelChan)

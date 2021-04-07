@@ -85,18 +85,29 @@ type Publisher struct {
 	disablePublishDueToFlow    bool
 	disablePublishDueToFlowMux *sync.RWMutex
 
-	logger logger
+	logger Logger
 }
 
 // PublisherOptions are used to describe a publisher's configuration.
 // Logging set to true will enable the consumer to print to stdout
 type PublisherOptions struct {
 	Logging bool
+	Logger  Logger
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logging = true
+	options.Logger = &stdlog{}
+}
+
+// WithPublisherOptionsLogger sets logging to a custom interface.
+// Use WithPublisherOptionsLogging to just log to stdout.
+func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Logging = true
+		options.Logger = log
+	}
 }
 
 // NewPublisher returns a new publisher with an open channel to the cluster.
@@ -109,8 +120,11 @@ func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
+	if options.Logger == nil {
+		options.Logger = &nolog{} // default no logging
+	}
 
-	chManager, err := newChannelManager(url, options.Logging)
+	chManager, err := newChannelManager(url, options.Logger)
 	if err != nil {
 		return Publisher{}, nil, err
 	}
@@ -120,7 +134,7 @@ func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher
 		notifyFlowChan:             make(chan bool),
 		disablePublishDueToFlow:    false,
 		disablePublishDueToFlowMux: &sync.RWMutex{},
-		logger:                     logger{logging: options.Logging},
+		logger:                     options.Logger,
 	}
 
 	returnAMQPChan := make(chan amqp.Return)
@@ -182,13 +196,13 @@ func (publisher *Publisher) Publish(
 func (publisher *Publisher) startNotifyFlowHandler() {
 	for ok := range publisher.notifyFlowChan {
 		publisher.disablePublishDueToFlowMux.Lock()
-		publisher.logger.Println("pausing publishing due to flow request from server")
+		publisher.logger.Printf("pausing publishing due to flow request from server")
 		if ok {
 			publisher.disablePublishDueToFlow = false
 		} else {
 			publisher.disablePublishDueToFlow = true
 		}
 		publisher.disablePublishDueToFlowMux.Unlock()
-		publisher.logger.Println("resuming publishing due to flow request from server")
+		publisher.logger.Printf("resuming publishing due to flow request from server")
 	}
 }
