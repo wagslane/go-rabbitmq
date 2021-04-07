@@ -101,7 +101,7 @@ func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logger = &stdlog{}
 }
 
-// WithPublisherOptionLogger sets logging to a custom interface.
+// WithPublisherOptionsLogger sets logging to a custom interface.
 // Use WithPublisherOptionsLogging to just log to stdout.
 func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 	return func(options *PublisherOptions) {

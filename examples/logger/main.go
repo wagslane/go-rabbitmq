@@ -9,6 +9,7 @@ import (
 // CustomLog is used in WithPublisherOptionsLogger to create a custom logger.
 type CustomLog struct{}
 
+// Printf is the only method needed in the Logger interface to function properly.
 func (c *CustomLog) Printf(fmt string, args ...interface{}) {
 	log.Printf("mylogger: "+fmt, args...)
 }
