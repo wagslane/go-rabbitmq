@@ -13,14 +13,14 @@ type Logger interface {
 
 const loggingPrefix = "gorabbit"
 
-// stdlog logs to stdout using go's default logger.
-type stdlog struct{}
+// stdLogger logs to stdout using go's default logger.
+type stdLogger struct{}
 
-func (l stdlog) Printf(format string, v ...interface{}) {
+func (l stdLogger) Printf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
 }
 
-// nolog does not log at all, this is the default.
-type nolog struct{}
+// noLogger does not log at all, this is the default.
+type noLogger struct{}
 
-func (l nolog) Printf(format string, v ...interface{}) {}
+func (l noLogger) Printf(format string, v ...interface{}) {}

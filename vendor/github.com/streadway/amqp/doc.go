@@ -7,7 +7,7 @@
 Package amqp is an AMQP 0.9.1 client with RabbitMQ extensions
 
 Understand the AMQP 0.9.1 messaging model by reviewing these links first. Much
-of the terminology in this library directly relates to AMQP concepts.
+of the terminoLoggery in this library directly relates to AMQP concepts.
 
   Resources
 

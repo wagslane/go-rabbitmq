@@ -6,16 +6,16 @@ import (
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
-// CustomLog is used in WithPublisherOptionsLogger to create a custom logger.
-type CustomLog struct{}
+// customLogger is used in WithPublisherOptionsLogger to create a custom logger.
+type customLogger struct{}
 
 // Printf is the only method needed in the Logger interface to function properly.
-func (c *CustomLog) Printf(fmt string, args ...interface{}) {
+func (c *customLogger) Printf(fmt string, args ...interface{}) {
 	log.Printf("mylogger: "+fmt, args...)
 }
 
 func main() {
-	mylogger := &CustomLog{}
+	mylogger := &customLogger{}
 
 	publisher, returns, err := rabbitmq.NewPublisher(
 		"amqp://guest:guest@localhost",

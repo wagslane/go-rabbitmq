@@ -34,7 +34,7 @@ func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, e
 		optionFunc(options)
 	}
 	if options.Logger == nil {
-		options.Logger = &nolog{} // default no logging
+		options.Logger = &noLogger{} // default no logging
 	}
 
 	chManager, err := newChannelManager(url, options.Logger)
@@ -48,10 +48,10 @@ func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, e
 	return consumer, nil
 }
 
-// WithConsumerOptionsLogging sets logging to true on the consumer options
+// WithConsumerOptionsLogging sets a logger to log to stdout
 func WithConsumerOptionsLogging(options *ConsumerOptions) {
 	options.Logging = true
-	options.Logger = &stdlog{}
+	options.Logger = &stdLogger{}
 }
 
 // WithConsumerOptionsLogger sets logging to a custom interface.

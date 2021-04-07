@@ -98,7 +98,7 @@ type PublisherOptions struct {
 // WithPublisherOptionsLogging sets logging to true on the consumer options
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logging = true
-	options.Logger = &stdlog{}
+	options.Logger = &stdLogger{}
 }
 
 // WithPublisherOptionsLogger sets logging to a custom interface.
@@ -121,7 +121,7 @@ func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher
 		optionFunc(options)
 	}
 	if options.Logger == nil {
-		options.Logger = &nolog{} // default no logging
+		options.Logger = &noLogger{} // default no logging
 	}
 
 	chManager, err := newChannelManager(url, options.Logger)
