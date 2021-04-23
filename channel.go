@@ -66,8 +66,18 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
 	}
-	close(notifyCancelChan)
-	close(notifyCloseChan)
+
+	// these channels can be closed by amqp
+	select {
+	case <-notifyCloseChan:
+	default:
+		close(notifyCloseChan)
+	}
+	select {
+	case <-notifyCancelChan:
+	default:
+		close(notifyCancelChan)
+	}
 }
 
 // reconnectWithBackoff continuously attempts to reconnect with an
