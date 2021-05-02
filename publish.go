@@ -40,6 +40,7 @@ type PublishOptions struct {
 	ContentType string
 	// Transient or Persistent
 	DeliveryMode uint8
+	Headers      Table
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -74,6 +75,13 @@ func WithPublishOptionsContentType(contentType string) func(*PublishOptions) {
 // are transient
 func WithPublishOptionsPersistentDelivery(options *PublishOptions) {
 	options.DeliveryMode = Persistent
+}
+
+// WithPublishOptionsHeaders returns a function that sets message header values, i.e. "msg-id"
+func WithPublishOptionsHeaders(headers Table) func(*PublishOptions) {
+	return func(options *PublishOptions) {
+		options.Headers = headers
+	}
 }
 
 // Publisher allows you to publish messages safely across an open connection
@@ -182,6 +190,7 @@ func (publisher *Publisher) Publish(
 			options.Mandatory,
 			options.Immediate,
 			amqp.Publishing{
+				Headers:      tableToAMQPTable(options.Headers),
 				ContentType:  options.ContentType,
 				Body:         data,
 				DeliveryMode: options.DeliveryMode,
