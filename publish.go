@@ -42,6 +42,7 @@ type PublishOptions struct {
 	DeliveryMode uint8
 	// Expiration time in ms a message will expire from a queue.
 	Expiration		string
+	Headers      Table
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -83,6 +84,13 @@ func WithPublishOptionsPersistentDelivery(options *PublishOptions) {
 func WithPublishOptionsExpiration (expiration string) func(options *PublishOptions) {
 	return func(options *PublishOptions) {
 		options.Expiration = expiration
+	}
+}
+
+// WithPublishOptionsHeaders returns a function that sets message header values, i.e. "msg-id"
+func WithPublishOptionsHeaders(headers Table) func(*PublishOptions) {
+	return func(options *PublishOptions) {
+		options.Headers = headers
 	}
 }
 
@@ -189,11 +197,19 @@ func (publisher *Publisher) Publish(
 		var message = amqp.Publishing{}
 		message.ContentType = options.ContentType
 		message.DeliveryMode = options.DeliveryMode
+		// Message Body
 		message.Body = data
+
+		// If no header options, don't add.
+		if len(options.Headers) > 0 {
+			message.Headers = tableToAMQPTable(options.Headers)
+		}
+
 		// If we have a TTL use it.
 		if options.Expiration != "" {
 			message.Expiration = options.Expiration
 		}
+
 		// Actual publish.
 		err := publisher.chManager.channel.Publish(
 			options.Exchange,
