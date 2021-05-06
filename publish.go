@@ -40,9 +40,10 @@ type PublishOptions struct {
 	ContentType string
 	// Transient or Persistent
 	DeliveryMode uint8
-	// Expiration time in ms a message will expire from a queue.
-	Expiration		string
-	Headers      Table
+	// Expiration time in ms that a message will expire from a queue.
+	// See https://www.rabbitmq.com/ttl.html#per-message-ttl-in-publishers
+	Expiration string
+	Headers Table
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -197,18 +198,9 @@ func (publisher *Publisher) Publish(
 		var message = amqp.Publishing{}
 		message.ContentType = options.ContentType
 		message.DeliveryMode = options.DeliveryMode
-		// Message Body
 		message.Body = data
-
-		// If no header options, don't add.
-		if len(options.Headers) > 0 {
-			message.Headers = tableToAMQPTable(options.Headers)
-		}
-
-		// If we have a TTL use it.
-		if options.Expiration != "" {
-			message.Expiration = options.Expiration
-		}
+		message.Headers = tableToAMQPTable(options.Headers)
+		message.Expiration = options.Expiration
 
 		// Actual publish.
 		err := publisher.chManager.channel.Publish(
