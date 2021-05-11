@@ -71,7 +71,7 @@ func getDefaultConsumeOptions() ConsumeOptions {
 		QueueExclusive:    false,
 		QueueNoWait:       false,
 		QueueArgs:         nil,
-		BindingExchange:   "",
+		BindingExchange:   nil,
 		BindingNoWait:     false,
 		BindingArgs:       nil,
 		Concurrency:       1,
@@ -93,7 +93,7 @@ type ConsumeOptions struct {
 	QueueExclusive    bool
 	QueueNoWait       bool
 	QueueArgs         Table
-	BindingExchange   string
+	BindingExchange   *BindingExchangeOptions
 	BindingNoWait     bool
 	BindingArgs       Table
 	Concurrency       int
@@ -105,6 +105,18 @@ type ConsumeOptions struct {
 	ConsumerNoWait    bool
 	ConsumerNoLocal   bool
 	ConsumerArgs      Table
+}
+
+// BindingExchangeOptions are used when binding to an exchange.
+// it will verify the exchange is created before binding to it.
+type BindingExchangeOptions struct {
+	Name         string
+	Type         string
+	Durable      bool
+	AutoDelete   bool
+	Internal     bool
+	NoWait       bool
+	ExchangeArgs Table
 }
 
 // WithConsumeOptionsQueueDurable sets the queue to durable, which means it won't
@@ -146,9 +158,17 @@ func WithConsumeOptionsQuorum(options *ConsumeOptions) {
 }
 
 // WithConsumeOptionsBindingExchange returns a function that sets the exchange the queue will be bound to
-func WithConsumeOptionsBindingExchange(exchange string) func(*ConsumeOptions) {
+func WithConsumeOptionsBindingExchange(name, kind string, durable, autoDelete, internal, noWait bool, args Table) func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		options.BindingExchange = exchange
+		options.BindingExchange = &BindingExchangeOptions{
+			Name:         name,
+			Type:         kind,
+			Durable:      durable,
+			AutoDelete:   autoDelete,
+			Internal:     internal,
+			NoWait:       noWait,
+			ExchangeArgs: args,
+		}
 	}
 }
 
@@ -300,12 +320,25 @@ func (consumer Consumer) startGoroutines(
 		return err
 	}
 
-	if consumeOptions.BindingExchange != "" {
+	if consumeOptions.BindingExchange != nil {
+		exchange := consumeOptions.BindingExchange
+		err = consumer.chManager.channel.ExchangeDeclare(
+			exchange.Name,
+			exchange.Type,
+			exchange.Durable,
+			exchange.AutoDelete,
+			exchange.Internal,
+			exchange.NoWait,
+			tableToAMQPTable(exchange.ExchangeArgs),
+		)
+		if err != nil {
+			return err
+		}
 		for _, routingKey := range routingKeys {
 			err = consumer.chManager.channel.QueueBind(
 				queue,
 				routingKey,
-				consumeOptions.BindingExchange,
+				exchange.Name,
 				consumeOptions.BindingNoWait,
 				tableToAMQPTable(consumeOptions.BindingArgs),
 			)
