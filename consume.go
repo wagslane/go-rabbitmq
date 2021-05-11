@@ -189,30 +189,30 @@ func WithConsumeOptionsBindingExchangeKind(kind string) func(*ConsumeOptions) {
 }
 
 // WithConsumeOptionsBindingExchangeDurable returns a function that sets the binding exchange durable flag
-func WithConsumeOptionsBindingExchangeDurable(durable bool) func(*ConsumeOptions) {
+func WithConsumeOptionsBindingExchangeDurable() func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).Durable = durable
+		getBindingExchangeOptionsOrSetDefault(options).Durable = true
 	}
 }
 
 // WithConsumeOptionsBindingExchangeAutoDelete returns a function that sets the binding exchange autoDelete flag
-func WithConsumeOptionsBindingExchangeAutoDelete(autoDelete bool) func(*ConsumeOptions) {
+func WithConsumeOptionsBindingExchangeAutoDelete() func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).AutoDelete = autoDelete
+		getBindingExchangeOptionsOrSetDefault(options).AutoDelete = true
 	}
 }
 
 // WithConsumeOptionsBindingExchangeInternal returns a function that sets the binding exchange internal flag
-func WithConsumeOptionsBindingExchangeInternal(internal bool) func(*ConsumeOptions) {
+func WithConsumeOptionsBindingExchangeInternal() func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).Internal = internal
+		getBindingExchangeOptionsOrSetDefault(options).Internal = true
 	}
 }
 
 // WithConsumeOptionsBindingExchangeNoWait returns a function that sets the binding exchange noWait flag
-func WithConsumeOptionsBindingExchangeNoWait(noWait bool) func(*ConsumeOptions) {
+func WithConsumeOptionsBindingExchangeNoWait() func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).NoWait = noWait
+		getBindingExchangeOptionsOrSetDefault(options).NoWait = true
 	}
 }
 
