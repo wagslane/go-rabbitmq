@@ -43,7 +43,7 @@ type PublishOptions struct {
 	// Expiration time in ms that a message will expire from a queue.
 	// See https://www.rabbitmq.com/ttl.html#per-message-ttl-in-publishers
 	Expiration string
-	Headers Table
+	Headers    Table
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -82,7 +82,7 @@ func WithPublishOptionsPersistentDelivery(options *PublishOptions) {
 
 // WithPublishOptionsExpiration returns a function that sets the expiry/TTL of a message. As per RabbitMq spec, it must be a
 // string value in milliseconds.
-func WithPublishOptionsExpiration (expiration string) func(options *PublishOptions) {
+func WithPublishOptionsExpiration(expiration string) func(options *PublishOptions) {
 	return func(options *PublishOptions) {
 		options.Expiration = expiration
 	}
@@ -209,7 +209,7 @@ func (publisher *Publisher) Publish(
 			options.Mandatory,
 			options.Immediate,
 			message,
-			)
+		)
 		if err != nil {
 			return err
 		}
