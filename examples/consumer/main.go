@@ -25,7 +25,9 @@ func main() {
 		rabbitmq.WithConsumeOptionsConcurrency(10),
 		rabbitmq.WithConsumeOptionsQueueDurable,
 		rabbitmq.WithConsumeOptionsQuorum,
-		rabbitmq.WithConsumeOptionsBindingExchange("events"),
+		rabbitmq.WithConsumeOptionsBindingExchangeName("events"),
+		rabbitmq.WithConsumeOptionsBindingExchangeKind("topic"),
+		rabbitmq.WithConsumeOptionsBindingExchangeDurable,
 	)
 	if err != nil {
 		log.Fatal(err)
