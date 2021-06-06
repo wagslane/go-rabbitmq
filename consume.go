@@ -107,6 +107,13 @@ func (consumer Consumer) StartConsuming(
 	return nil
 }
 
+// StopConsuming stops the consumption of messages.
+// The consumer should be discarded as it's not safe for re-use
+func (consumer Consumer) StopConsuming() {
+	consumer.chManager.channel.Close()
+	consumer.chManager.connection.Close()
+}
+
 // startGoroutinesWithRetries attempts to start consuming on a channel
 // with an exponential backoff
 func (consumer Consumer) startGoroutinesWithRetries(
