@@ -3,12 +3,13 @@ package main
 import (
 	"log"
 
+	"github.com/streadway/amqp"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 func main() {
 	publisher, returns, err := rabbitmq.NewPublisher(
-		"amqp://guest:guest@localhost",
+		"amqp://guest:guest@localhost", amqp.Config{},
 		rabbitmq.WithPublisherOptionsLogging,
 	)
 	if err != nil {
