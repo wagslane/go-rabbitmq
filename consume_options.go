@@ -189,7 +189,6 @@ func WithConsumeOptionsConsumerName(consumerName string) func(*ConsumeOptions) {
 	}
 }
 
-
 // WithConsumeOptionsConsumerAutoAck returns a function that sets the auto acknowledge property on the server of this consumer
 // if unset the default will be used (false)
 func WithConsumeOptionsConsumerAutoAck(autoAck bool) func(*ConsumeOptions) {
