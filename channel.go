@@ -13,12 +13,13 @@ type channelManager struct {
 	url                 string
 	channel             *amqp.Channel
 	connection          *amqp.Connection
+	config              amqp.Config
 	channelMux          *sync.RWMutex
 	notifyCancelOrClose chan error
 }
 
-func newChannelManager(url string, log Logger) (*channelManager, error) {
-	conn, ch, err := getNewChannel(url)
+func newChannelManager(url string, conf amqp.Config, log Logger) (*channelManager, error) {
+	conn, ch, err := getNewChannel(url, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +36,8 @@ func newChannelManager(url string, log Logger) (*channelManager, error) {
 	return &chManager, nil
 }
 
-func getNewChannel(url string) (*amqp.Connection, *amqp.Channel, error) {
-	amqpConn, err := amqp.Dial(url)
+func getNewChannel(url string, conf amqp.Config) (*amqp.Connection, *amqp.Channel, error) {
+	amqpConn, err := amqp.DialConfig(url, conf)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,7 +107,7 @@ func (chManager *channelManager) reconnectWithBackoff() {
 func (chManager *channelManager) reconnect() error {
 	chManager.channelMux.Lock()
 	defer chManager.channelMux.Unlock()
-	newConn, newChannel, err := getNewChannel(chManager.url)
+	newConn, newChannel, err := getNewChannel(chManager.url, chManager.config)
 	if err != nil {
 		return err
 	}

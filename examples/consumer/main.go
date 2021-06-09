@@ -3,12 +3,13 @@ package main
 import (
 	"log"
 
+	"github.com/streadway/amqp"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 func main() {
 	consumer, err := rabbitmq.NewConsumer(
-		"amqp://guest:guest@localhost",
+		"amqp://guest:guest@localhost", amqp.Config{},
 		rabbitmq.WithConsumerOptionsLogging,
 	)
 	if err != nil {

@@ -134,7 +134,7 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
+func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
 	options := &PublisherOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -143,7 +143,7 @@ func NewPublisher(url string, optionFuncs ...func(*PublisherOptions)) (Publisher
 		options.Logger = &noLogger{} // default no logging
 	}
 
-	chManager, err := newChannelManager(url, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger)
 	if err != nil {
 		return Publisher{}, nil, err
 	}
@@ -215,6 +215,13 @@ func (publisher *Publisher) Publish(
 		}
 	}
 	return nil
+}
+
+// StopPublishing stops the publishing of messages.
+// The publisher should be discarded as it's not safe for re-use
+func (publisher Publisher) StopPublishing() {
+	publisher.chManager.channel.Close()
+	publisher.chManager.connection.Close()
 }
 
 func (publisher *Publisher) startNotifyFlowHandler() {

@@ -29,7 +29,7 @@ type Delivery struct {
 }
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
-func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
+func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
 	options := &ConsumerOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -38,7 +38,7 @@ func NewConsumer(url string, optionFuncs ...func(*ConsumerOptions)) (Consumer, e
 		options.Logger = &noLogger{} // default no logging
 	}
 
-	chManager, err := newChannelManager(url, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger)
 	if err != nil {
 		return Consumer{}, err
 	}
