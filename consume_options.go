@@ -189,6 +189,14 @@ func WithConsumeOptionsConsumerName(consumerName string) func(*ConsumeOptions) {
 	}
 }
 
+// WithConsumeOptionsConsumerAutoAck returns a function that sets the auto acknowledge property on the server of this consumer
+// if unset the default will be used (false)
+func WithConsumeOptionsConsumerAutoAck(autoAck bool) func(*ConsumeOptions) {
+	return func(options *ConsumeOptions) {
+		options.ConsumerAutoAck = autoAck
+	}
+}
+
 // WithConsumeOptionsConsumerExclusive sets the consumer to exclusive, which means
 // the server will ensure that this is the sole consumer
 // from this queue. When exclusive is false, the server will fairly distribute
