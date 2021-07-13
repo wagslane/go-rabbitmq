@@ -53,10 +53,9 @@ func getNewChannel(url string, conf amqp.Config) (*amqp.Connection, *amqp.Channe
 // backoff. Once reconnected, it sends an error back on the manager's notifyCancelOrClose
 // channel
 func (chManager *channelManager) startNotifyCancelOrClosed() {
-	notifyCloseChan := make(chan *amqp.Error)
-	notifyCloseChan = chManager.channel.NotifyClose(notifyCloseChan)
-	notifyCancelChan := make(chan string)
-	notifyCancelChan = chManager.channel.NotifyCancel(notifyCancelChan)
+	notifyCloseChan := chManager.channel.NotifyClose(make(chan *amqp.Error, 1))
+	notifyCancelChan := chManager.channel.NotifyCancel(make(chan string, 1))
+
 	select {
 	case err := <-notifyCloseChan:
 		// If the connection close is triggered by the Server, a reconnection takes place
@@ -71,18 +70,6 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 		chManager.reconnectWithBackoff()
 		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
-	}
-
-	// these channels can be closed by amqp
-	select {
-	case <-notifyCloseChan:
-	default:
-		close(notifyCloseChan)
-	}
-	select {
-	case <-notifyCancelChan:
-	default:
-		close(notifyCancelChan)
 	}
 }
 
