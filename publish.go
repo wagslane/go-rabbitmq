@@ -230,6 +230,10 @@ func (publisher *Publisher) startNotifyHandlers() {
 }
 
 func (publisher *Publisher) startNotifyFlowHandler(notifyFlowChan chan bool) {
+	publisher.disablePublishDueToFlowMux.Lock()
+	publisher.disablePublishDueToFlow = false
+	publisher.disablePublishDueToFlowMux.Unlock()
+
 	// Listeners for active=true flow control.  When true is sent to a listener,
 	// publishing should pause until false is sent to listeners.
 	for ok := range notifyFlowChan {
