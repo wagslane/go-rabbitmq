@@ -99,8 +99,6 @@ func WithPublishOptionsHeaders(headers Table) func(*PublishOptions) {
 type Publisher struct {
 	chManager *channelManager
 
-	notifyFlowChan chan bool
-
 	disablePublishDueToFlow    bool
 	disablePublishDueToFlowMux *sync.RWMutex
 
@@ -150,26 +148,31 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 
 	publisher := Publisher{
 		chManager:                  chManager,
-		notifyFlowChan:             make(chan bool),
 		disablePublishDueToFlow:    false,
 		disablePublishDueToFlowMux: &sync.RWMutex{},
 		logger:                     options.Logger,
 	}
 
-	returnAMQPChan := make(chan amqp.Return)
 	returnChan := make(chan Return)
-	returnAMQPChan = publisher.chManager.channel.NotifyReturn(returnAMQPChan)
 	go func() {
-		for ret := range returnAMQPChan {
-			returnChan <- Return{
-				ret,
-			}
+		setupNotifyChans := func() {
+			returnAMQPChan := publisher.chManager.channel.NotifyReturn(make(chan amqp.Return))
+			go func() {
+				for ret := range returnAMQPChan {
+					returnChan <- Return{ret}
+				}
+			}()
+
+			notifyFlowChan := publisher.chManager.channel.NotifyFlow(make(chan bool))
+			go publisher.startNotifyFlowHandler(notifyFlowChan)
+		}
+
+		setupNotifyChans()
+		for err := range publisher.chManager.notifyCancelOrClose {
+			publisher.logger.Printf("publish cancel/close handler triggered. err: %v", err)
+			setupNotifyChans()
 		}
 	}()
-
-	publisher.notifyFlowChan = publisher.chManager.channel.NotifyFlow(publisher.notifyFlowChan)
-
-	go publisher.startNotifyFlowHandler()
 
 	return publisher, returnChan, nil
 }
@@ -224,10 +227,10 @@ func (publisher Publisher) StopPublishing() {
 	publisher.chManager.connection.Close()
 }
 
-func (publisher *Publisher) startNotifyFlowHandler() {
+func (publisher *Publisher) startNotifyFlowHandler(notifyFlowChan chan bool) {
 	// Listeners for active=true flow control.  When true is sent to a listener,
 	// publishing should pause until false is sent to listeners.
-	for ok := range publisher.notifyFlowChan {
+	for ok := range notifyFlowChan {
 		publisher.disablePublishDueToFlowMux.Lock()
 		if ok {
 			publisher.logger.Printf("pausing publishing due to flow request from server")
