@@ -30,6 +30,7 @@ func newChannelManager(url string, conf amqp.Config, log Logger) (*channelManage
 		connection:          conn,
 		channel:             ch,
 		channelMux:          &sync.RWMutex{},
+		config:              conf,
 		notifyCancelOrClose: make(chan error),
 	}
 	go chManager.startNotifyCancelOrClosed()
