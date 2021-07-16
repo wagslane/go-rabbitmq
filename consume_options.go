@@ -55,6 +55,7 @@ func getBindingExchangeOptionsOrSetDefault(options *ConsumeOptions) *BindingExch
 			Internal:     false,
 			NoWait:       false,
 			ExchangeArgs: nil,
+			Declare:      true,
 		}
 	}
 	return options.BindingExchange
@@ -70,6 +71,7 @@ type BindingExchangeOptions struct {
 	Internal     bool
 	NoWait       bool
 	ExchangeArgs Table
+	Declare      bool
 }
 
 // WithConsumeOptionsQueueDurable sets the queue to durable, which means it won't
@@ -149,6 +151,13 @@ func WithConsumeOptionsBindingExchangeArgs(args Table) func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
 		getBindingExchangeOptionsOrSetDefault(options).ExchangeArgs = args
 	}
+}
+
+// WithConsumeOptionsBindingExchangeSkipDeclare returns a function that skips the declaration of the
+// binding exchange. Use this setting if the exchange already exists and you don't need to declare
+// it on consumer start.
+func WithConsumeOptionsBindingExchangeSkipDeclare(options *ConsumeOptions) {
+	getBindingExchangeOptionsOrSetDefault(options).Declare = false
 }
 
 // WithConsumeOptionsBindingNoWait sets the bindings to nowait, which means if the queue can not be bound
