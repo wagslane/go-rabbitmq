@@ -134,7 +134,7 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
+func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (*Publisher, <-chan Return, error) {
 	options := &PublisherOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -145,10 +145,10 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 
 	chManager, err := newChannelManager(url, config, options.Logger)
 	if err != nil {
-		return Publisher{}, nil, err
+		return nil, nil, err
 	}
 
-	publisher := Publisher{
+	publisher := &Publisher{
 		chManager:                  chManager,
 		notifyReturnChan:           make(chan Return, 1),
 		disablePublishDueToFlow:    false,
