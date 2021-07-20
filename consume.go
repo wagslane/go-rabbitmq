@@ -2,8 +2,9 @@ package rabbitmq
 
 import (
 	"fmt"
-	"github.com/streadway/amqp"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 // Consumer allows you to create and connect to queues for data consumption.
@@ -188,17 +189,19 @@ func (consumer Consumer) startGoroutines(
 		if exchange.Name == "" {
 			return fmt.Errorf("binding to exchange but name not specified")
 		}
-		err = consumer.chManager.channel.ExchangeDeclare(
-			exchange.Name,
-			exchange.Kind,
-			exchange.Durable,
-			exchange.AutoDelete,
-			exchange.Internal,
-			exchange.NoWait,
-			tableToAMQPTable(exchange.ExchangeArgs),
-		)
-		if err != nil {
-			return err
+		if exchange.Declare {
+			err = consumer.chManager.channel.ExchangeDeclare(
+				exchange.Name,
+				exchange.Kind,
+				exchange.Durable,
+				exchange.AutoDelete,
+				exchange.Internal,
+				exchange.NoWait,
+				tableToAMQPTable(exchange.ExchangeArgs),
+			)
+			if err != nil {
+				return err
+			}
 		}
 		for _, routingKey := range routingKeys {
 			err = consumer.chManager.channel.QueueBind(
