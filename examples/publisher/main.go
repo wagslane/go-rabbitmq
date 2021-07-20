@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	publisher, returns, err := rabbitmq.NewPublisher(
+	publisher, err := rabbitmq.NewPublisher(
 		"amqp://guest:guest@localhost", amqp.Config{},
 		rabbitmq.WithPublisherOptionsLogging,
 	)
@@ -27,6 +27,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	returns := publisher.NotifyReturn()
 	go func() {
 		for r := range returns {
 			log.Printf("message returned from server: %s", string(r.Body))
