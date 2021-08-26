@@ -1,6 +1,6 @@
 package rabbitmq
 
-import "github.com/streadway/amqp"
+import amqp "github.com/rabbitmq/amqp091-go"
 
 // Table stores user supplied fields of the following types:
 //

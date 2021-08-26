@@ -8,7 +8,7 @@ Supported by [Qvault](https://qvault.io)
 
 ## Motivation
 
-[Streadway's AMQP](https://github.com/streadway/amqp) library is currently the most robust and well-supported Go client I'm aware of. It's a fantastic option and I recommend starting there and seeing if it fulfills your needs. Their project has made an effort to stay within the scope of the AMQP protocol, as such, no reconnection logic and few ease-of-use abstractions are provided.
+[Streadway's AMQP](https://github.com/rabbitmq/amqp091-go) library is currently the most robust and well-supported Go client I'm aware of. It's a fantastic option and I recommend starting there and seeing if it fulfills your needs. Their project has made an effort to stay within the scope of the AMQP protocol, as such, no reconnection logic and few ease-of-use abstractions are provided.
 
 The goal with `go-rabbitmq` is to still provide most all of the nitty-gritty functionality of AMQP, but to make it easier to work with via a higher-level API. Particularly:
 
@@ -128,7 +128,7 @@ Submit an issue (above in the issues tab)
 
 ## Transient Dependencies
 
-My goal is to keep dependencies limited to 1, [github.com/streadway/amqp](https://github.com/streadway/amqp).
+My goal is to keep dependencies limited to 1, [github.com/rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go).
 
 ## 👏 Contributing
 
