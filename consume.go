@@ -10,6 +10,7 @@ import (
 // Action is an action that occurs after processed this delivery
 type Action int
 
+
 // Handler defines the handler of each Delivery and return Action
 type Handler func(d Delivery) (action Action)
 
