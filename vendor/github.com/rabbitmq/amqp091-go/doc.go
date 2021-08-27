@@ -1,13 +1,12 @@
-// Copyright (c) 2012, Sean Treadway, SoundCloud Ltd.
+// Copyright (c) 2021 VMware, Inc. or its affiliates. All Rights Reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-// Source code and contact info at http://github.com/streadway/amqp
 
 /*
-Package amqp is an AMQP 0.9.1 client with RabbitMQ extensions
+Package amqp091 is an AMQP 0.9.1 client with RabbitMQ extensions
 
 Understand the AMQP 0.9.1 messaging model by reviewing these links first. Much
-of the terminoLoggery in this library directly relates to AMQP concepts.
+of the terminology in this library directly relates to AMQP concepts.
 
   Resources
 
@@ -59,7 +58,7 @@ of band from an RPC call like basic.ack or basic.flow.
 
 Any asynchronous events, including Deliveries and Publishings must always have
 a receiver until the corresponding chans are closed.  Without asynchronous
-receivers, the sychronous methods will block.
+receivers, the synchronous methods will block.
 
 Use Case
 
@@ -105,4 +104,4 @@ encounters an amqp:// scheme.
 SSL/TLS in RabbitMQ is documented here: http://www.rabbitmq.com/ssl.html
 
 */
-package amqp
+package amqp091

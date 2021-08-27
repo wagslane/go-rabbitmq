@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // DeliveryMode. Transient means higher throughput but messages will not be
