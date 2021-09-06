@@ -1,9 +1,8 @@
-// Copyright (c) 2012, Sean Treadway, SoundCloud Ltd.
+// Copyright (c) 2021 VMware, Inc. or its affiliates. All Rights Reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-// Source code and contact info at http://github.com/streadway/amqp
 
-package amqp
+package amqp091
 
 import (
 	"fmt"
@@ -29,7 +28,7 @@ var (
 	ErrChannelMax = &Error{Code: ChannelError, Reason: "channel id space exhausted"}
 
 	// ErrSASL is returned from Dial when the authentication mechanism could not
-	// be negoated.
+	// be negotiated.
 	ErrSASL = &Error{Code: AccessRefused, Reason: "SASL could not negotiate a shared mechanism"}
 
 	// ErrCredentials is returned when the authenticated client is not authorized

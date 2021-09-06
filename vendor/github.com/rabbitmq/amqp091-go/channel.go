@@ -1,9 +1,8 @@
-// Copyright (c) 2012, Sean Treadway, SoundCloud Ltd.
+// Copyright (c) 2021 VMware, Inc. or its affiliates. All Rights Reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-// Source code and contact info at http://github.com/streadway/amqp
 
-package amqp
+package amqp091
 
 import (
 	"reflect"
@@ -431,6 +430,12 @@ func (ch *Channel) Close() error {
 		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
 	)
+}
+
+// IsClosed returns true if the channel is marked as closed, otherwise false
+// is returned.
+func (ch *Channel) IsClosed() bool {
+	return atomic.LoadInt32(&ch.closed) == 1
 }
 
 /*
@@ -1082,7 +1087,7 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 		return nil, err
 	}
 
-	return (<-chan Delivery)(deliveries), nil
+	return deliveries, nil
 }
 
 /*

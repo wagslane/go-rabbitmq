@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
@@ -16,10 +16,9 @@ func main() {
 		log.Fatal(err)
 	}
 	err = consumer.StartConsuming(
-		func(d rabbitmq.Delivery) bool {
+		func(d rabbitmq.Delivery) (action rabbitmq.Action) {
 			log.Printf("consumed: %v", string(d.Body))
-			// true to ACK, false to NACK
-			return true
+			return
 		},
 		"my_queue",
 		[]string{"routing_key", "routing_key_2"},
