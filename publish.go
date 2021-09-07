@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -112,6 +113,7 @@ type Publisher struct {
 type PublisherOptions struct {
 	Logging bool
 	Logger  Logger
+	Backoff time.Duration
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
@@ -129,13 +131,20 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 	}
 }
 
+// WithPublisherOptionsBackoff sets the duration to wait until a new reconnection try.
+func WithPublisherOptionsBackoff(backoff time.Duration) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Backoff = backoff
+	}
+}
+
 // NewPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (Publisher, <-chan Return, error) {
-	options := &PublisherOptions{}
+	options := &PublisherOptions{Backoff: 1 * time.Second}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -143,7 +152,7 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 		options.Logger = &noLogger{} // default no logging
 	}
 
-	chManager, err := newChannelManager(url, config, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger, options.Backoff)
 	if err != nil {
 		return Publisher{}, nil, err
 	}

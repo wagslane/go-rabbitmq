@@ -10,6 +10,7 @@ import (
 
 type channelManager struct {
 	logger              Logger
+	backoff             time.Duration
 	url                 string
 	channel             *amqp.Channel
 	connection          *amqp.Connection
@@ -18,7 +19,7 @@ type channelManager struct {
 	notifyCancelOrClose chan error
 }
 
-func newChannelManager(url string, conf amqp.Config, log Logger) (*channelManager, error) {
+func newChannelManager(url string, conf amqp.Config, log Logger, backoff time.Duration) (*channelManager, error) {
 	conn, ch, err := getNewChannel(url, conf)
 	if err != nil {
 		return nil, err
@@ -26,6 +27,7 @@ func newChannelManager(url string, conf amqp.Config, log Logger) (*channelManage
 
 	chManager := channelManager{
 		logger:              log,
+		backoff:             backoff,
 		url:                 url,
 		connection:          conn,
 		channel:             ch,
@@ -77,11 +79,9 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 // reconnectWithBackoff continuously attempts to reconnect with an
 // exponential backoff strategy
 func (chManager *channelManager) reconnectWithBackoff() {
-	backoffTime := time.Second
 	for {
-		chManager.logger.Printf("waiting %s seconds to attempt to reconnect to amqp server", backoffTime)
-		time.Sleep(backoffTime)
-		backoffTime *= 2
+		chManager.logger.Printf("waiting %s seconds to attempt to reconnect to amqp server", chManager.backoff)
+		time.Sleep(chManager.backoff)
 		err := chManager.reconnect()
 		if err != nil {
 			chManager.logger.Printf("error reconnecting to amqp server: %v", err)

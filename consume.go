@@ -34,6 +34,7 @@ type Consumer struct {
 type ConsumerOptions struct {
 	Logging bool
 	Logger  Logger
+	Backoff time.Duration
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -45,7 +46,7 @@ type Delivery struct {
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
 func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
-	options := &ConsumerOptions{}
+	options := &ConsumerOptions{Backoff: 1 * time.Second}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -53,7 +54,7 @@ func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOp
 		options.Logger = &noLogger{} // default no logging
 	}
 
-	chManager, err := newChannelManager(url, config, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger, options.Backoff)
 	if err != nil {
 		return Consumer{}, err
 	}
@@ -76,6 +77,13 @@ func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
 	return func(options *ConsumerOptions) {
 		options.Logging = true
 		options.Logger = log
+	}
+}
+
+// WithConsumerOptionsBackoff sets the duration to wait until a new reconnection try.
+func WithConsumerOptionsBackoff(backoff time.Duration) func(options *ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.Backoff = backoff
 	}
 }
 
