@@ -1,4 +1,4 @@
-module github.com/tscheckenbach/go-rabbitmq
+module github.com/wagslane/go-rabbitmq
 
 go 1.16
 
