@@ -221,3 +221,10 @@ func WithConsumeOptionsConsumerExclusive(options *ConsumeOptions) {
 func WithConsumeOptionsConsumerNoWait(options *ConsumeOptions) {
 	options.ConsumerNoWait = true
 }
+
+// WithConsumeOptionsQueueArgs returns a function that sets the queue arguments
+func WithConsumeOptionsQueueArgs(args Table) func(*ConsumeOptions) {
+	return func(options *ConsumeOptions) {
+		options.QueueArgs = args
+	}
+}
