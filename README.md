@@ -1,6 +1,6 @@
 # go-rabbitmq
 
-Wrapper of streadway/amqp that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
+Wrapper of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
 
 Supported by [Qvault](https://qvault.io)
 
