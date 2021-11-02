@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.4
+> 02 Nov 2021
+
+- Adjust all paths from wagslane to claranet for being able to install library
+
 ## v0.6.3
 > 02 Nov 2021
 

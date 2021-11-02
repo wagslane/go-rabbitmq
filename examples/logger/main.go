@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
+	rabbitmq "github.com/claranet/go-rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 // customLogger is used in WithPublisherOptionsLogger to create a custom logger.
