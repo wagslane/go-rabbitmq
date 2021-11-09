@@ -25,7 +25,7 @@ The goal with `go-rabbitmq` is to still provide most all of the nitty-gritty fun
 
 ## ⚙️ Installation
 
-Outside of a Go module:
+Inside a Go module:
 
 ```bash
 go get github.com/wagslane/go-rabbitmq
