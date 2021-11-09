@@ -41,10 +41,10 @@ if err != nil {
     log.Fatal(err)
 }
 err = consumer.StartConsuming(
-    func(d rabbitmq.Delivery) bool {
+    func(d rabbitmq.Delivery) rabbitmq.Action {
         log.Printf("consumed: %v", string(d.Body))
-        // true to ACK, false to NACK
-        return true
+        // rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+        return rabbitmq.Ack
     },
     "my_queue",
     []string{"routing_key1", "routing_key2"}
