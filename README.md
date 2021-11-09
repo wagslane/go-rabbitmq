@@ -1,6 +1,6 @@
 # go-rabbitmq
 
-Wrapper of streadway/amqp that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
+Wrapper of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
 
 Supported by [Qvault](https://qvault.io)
 
@@ -36,7 +36,7 @@ go get github.com/wagslane/go-rabbitmq
 ### Default options
 
 ```go
-consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost")
+consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", amqp.Config{})
 if err != nil {
     log.Fatal(err)
 }
@@ -59,16 +59,17 @@ if err != nil {
 ```go
 consumer, err := rabbitmq.NewConsumer(
     "amqp://user:pass@localhost",
+    amqp091.Config{},
     rabbitmq.WithConsumerOptionsLogging,
 )
 if err != nil {
     log.Fatal(err)
 }
 err = consumer.StartConsuming(
-    func(d rabbitmq.Delivery) bool {
+    func(d rabbitmq.Delivery) rabbitmq.Action {
         log.Printf("consumed: %v", string(d.Body))
-        // true to ACK, false to NACK
-        return true
+        // rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+        return rabbitmq.Ack
     },
     "my_queue",
     []string{"routing_key1", "routing_key2"},
@@ -86,7 +87,7 @@ if err != nil {
 ### Default options
 
 ```go
-publisher, returns, err := rabbitmq.NewPublisher("amqp://user:pass@localhost")
+publisher, returns, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", amqp091.Config{})
 if err != nil {
     log.Fatal(err)
 }
@@ -101,6 +102,7 @@ if err != nil {
 ```go
 publisher, returns, err := rabbitmq.NewPublisher(
     "amqp://user:pass@localhost",
+    amqp091.Config{},
     // can pass nothing for no logging
     rabbitmq.WithPublisherOptionsLogging,
 )
