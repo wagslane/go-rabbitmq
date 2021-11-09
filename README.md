@@ -10,10 +10,6 @@ Supported by [Qvault](https://qvault.io)
 
 [Streadway's AMQP](https://github.com/rabbitmq/amqp091-go) library is currently the most robust and well-supported Go client I'm aware of. It's a fantastic option and I recommend starting there and seeing if it fulfills your needs. Their project has made an effort to stay within the scope of the AMQP protocol, as such, no reconnection logic and few ease-of-use abstractions are provided.
 
-⚠️ **Update**  
-
-The Core Team of RabbitMQ has resumed the maintenance on [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go).
-
 ### Goal 
 
 The goal with `go-rabbitmq` is to still provide most all of the nitty-gritty functionality of AMQP, but to make it easier to work with via a higher-level API. Particularly:
