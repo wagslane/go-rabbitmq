@@ -28,29 +28,42 @@ type Return struct {
 	amqp.Return
 }
 
+// Confirmation notifies the acknowledgment or negative acknowledgement of a publishing identified by its delivery tag.
+// Use NotifyPublish to consume these events.
+type Confirmation struct {
+	amqp.Confirmation
+}
+
 // Publisher allows you to publish messages safely across an open connection
 type Publisher struct {
 	chManager *channelManager
 
-	notifyReturnChan chan Return
+	notifyReturnChan  chan Return
+	notifyPublishChan chan Confirmation
 
 	disablePublishDueToFlow    bool
 	disablePublishDueToFlowMux *sync.RWMutex
 
-	logger Logger
+	options PublisherOptions
 }
 
 // PublisherOptions are used to describe a publisher's configuration.
 // Logging set to true will enable the consumer to print to stdout
 type PublisherOptions struct {
-	Logging bool
-	Logger  Logger
+	Logging            bool
+	Logger             Logger
+	ConfirmPublishings bool
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logging = true
 	options.Logger = &stdLogger{}
+}
+
+// WithPublishOptionsConfirmPublishings allows NotifyPublish to work
+func WithPublishOptionsConfirmPublishings(options *PublisherOptions) {
+	options.ConfirmPublishings = true
 }
 
 // WithPublisherOptionsLogger sets logging to a custom interface.
@@ -85,8 +98,9 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 		chManager:                  chManager,
 		disablePublishDueToFlow:    false,
 		disablePublishDueToFlowMux: &sync.RWMutex{},
-		logger:                     options.Logger,
+		options:                    *options,
 		notifyReturnChan:           nil,
+		notifyPublishChan:          nil,
 	}
 
 	go publisher.startNotifyFlowHandler()
@@ -94,10 +108,13 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 	// restart notifiers when cancel/close is triggered
 	go func() {
 		for err := range publisher.chManager.notifyCancelOrClose {
-			publisher.logger.Printf("publish cancel/close handler triggered. err: %v", err)
+			publisher.options.Logger.Printf("publish cancel/close handler triggered. err: %v", err)
 			go publisher.startNotifyFlowHandler()
 			if publisher.notifyReturnChan != nil {
 				go publisher.startNotifyReturnHandler()
+			}
+			if publisher.notifyPublishChan != nil && publisher.options.ConfirmPublishings {
+				go publisher.startNotifyPublishHandler()
 			}
 		}
 	}()
@@ -111,6 +128,16 @@ func (publisher *Publisher) NotifyReturn() <-chan Return {
 	publisher.notifyReturnChan = make(chan Return)
 	go publisher.startNotifyReturnHandler()
 	return publisher.notifyReturnChan
+}
+
+// NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
+func (publisher *Publisher) NotifyPublish() <-chan Confirmation {
+	if !publisher.options.ConfirmPublishings {
+		return nil
+	}
+	publisher.notifyPublishChan = make(chan Confirmation)
+	go publisher.startNotifyPublishHandler()
+	return publisher.notifyPublishChan
 }
 
 // Publish publishes the provided data to the given routing keys over the connection
@@ -167,9 +194,12 @@ func (publisher *Publisher) Publish(
 
 // StopPublishing stops the publishing of messages.
 // The publisher should be discarded as it's not safe for re-use
-func (publisher Publisher) StopPublishing() {
-	publisher.chManager.channel.Close()
-	publisher.chManager.connection.Close()
+func (publisher Publisher) StopPublishing() error {
+	err := publisher.chManager.close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (publisher *Publisher) startNotifyFlowHandler() {
@@ -183,11 +213,11 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 	for ok := range notifyFlowChan {
 		publisher.disablePublishDueToFlowMux.Lock()
 		if ok {
-			publisher.logger.Printf("pausing publishing due to flow request from server")
+			publisher.options.Logger.Printf("pausing publishing due to flow request from server")
 			publisher.disablePublishDueToFlow = true
 		} else {
 			publisher.disablePublishDueToFlow = false
-			publisher.logger.Printf("resuming publishing due to flow request from server")
+			publisher.options.Logger.Printf("resuming publishing due to flow request from server")
 		}
 		publisher.disablePublishDueToFlowMux.Unlock()
 	}
@@ -197,5 +227,13 @@ func (publisher *Publisher) startNotifyReturnHandler() {
 	returnAMQPCh := publisher.chManager.channel.NotifyReturn(make(chan amqp.Return, 1))
 	for ret := range returnAMQPCh {
 		publisher.notifyReturnChan <- Return{ret}
+	}
+}
+
+func (publisher *Publisher) startNotifyPublishHandler() {
+	publisher.chManager.channel.Confirm(false)
+	publishAMQPCh := publisher.chManager.channel.NotifyPublish(make(chan amqp.Confirmation, 1))
+	for conf := range publishAMQPCh {
+		publisher.notifyPublishChan <- Confirmation{conf}
 	}
 }
