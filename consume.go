@@ -107,7 +107,7 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Printf("consume cancel/close handler triggered. err: %v", err)
+			consumer.logger.Printf("gorabbit: successful recovery from: %v", err)
 			consumer.startGoroutinesWithRetries(
 				handler,
 				queue,

@@ -50,20 +50,14 @@ type Publisher struct {
 // PublisherOptions are used to describe a publisher's configuration.
 // Logging set to true will enable the consumer to print to stdout
 type PublisherOptions struct {
-	Logging            bool
-	Logger             Logger
-	ConfirmPublishings bool
+	Logging bool
+	Logger  Logger
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logging = true
 	options.Logger = &stdLogger{}
-}
-
-// WithPublishOptionsConfirmPublishings allows NotifyPublish to work
-func WithPublishOptionsConfirmPublishings(options *PublisherOptions) {
-	options.ConfirmPublishings = true
 }
 
 // WithPublisherOptionsLogger sets logging to a custom interface.
@@ -80,7 +74,7 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (Publisher, error) {
+func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
 	options := &PublisherOptions{}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -91,10 +85,10 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 
 	chManager, err := newChannelManager(url, config, options.Logger)
 	if err != nil {
-		return Publisher{}, err
+		return nil, err
 	}
 
-	publisher := Publisher{
+	publisher := &Publisher{
 		chManager:                  chManager,
 		disablePublishDueToFlow:    false,
 		disablePublishDueToFlowMux: &sync.RWMutex{},
@@ -105,21 +99,22 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 
 	go publisher.startNotifyFlowHandler()
 
-	// restart notifiers when cancel/close is triggered
-	go func() {
-		for err := range publisher.chManager.notifyCancelOrClose {
-			publisher.options.Logger.Printf("publish cancel/close handler triggered. err: %v", err)
-			go publisher.startNotifyFlowHandler()
-			if publisher.notifyReturnChan != nil {
-				go publisher.startNotifyReturnHandler()
-			}
-			if publisher.notifyPublishChan != nil && publisher.options.ConfirmPublishings {
-				go publisher.startNotifyPublishHandler()
-			}
-		}
-	}()
+	go publisher.handleRestarts()
 
 	return publisher, nil
+}
+
+func (publisher *Publisher) handleRestarts() {
+	for err := range publisher.chManager.notifyCancelOrClose {
+		publisher.options.Logger.Printf("gorabbit: successful publisher recovery from: %v", err)
+		go publisher.startNotifyFlowHandler()
+		if publisher.notifyReturnChan != nil {
+			go publisher.startNotifyReturnHandler()
+		}
+		if publisher.notifyPublishChan != nil {
+			go publisher.startNotifyPublishHandler()
+		}
+	}
 }
 
 // NotifyReturn registers a listener for basic.return methods.
@@ -132,9 +127,6 @@ func (publisher *Publisher) NotifyReturn() <-chan Return {
 
 // NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
 func (publisher *Publisher) NotifyPublish() <-chan Confirmation {
-	if !publisher.options.ConfirmPublishings {
-		return nil
-	}
 	publisher.notifyPublishChan = make(chan Confirmation)
 	go publisher.startNotifyPublishHandler()
 	return publisher.notifyPublishChan

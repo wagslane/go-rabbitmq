@@ -16,7 +16,6 @@ func main() {
 	publisher, err := rabbitmq.NewPublisher(
 		"amqp://guest:guest@localhost", amqp.Config{},
 		rabbitmq.WithPublisherOptionsLogging,
-		rabbitmq.WithPublishOptionsConfirmPublishings,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -64,7 +63,7 @@ func main() {
 				rabbitmq.WithPublishOptionsExchange("events"),
 			)
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err)
 			}
 		case <-done:
 			fmt.Println("stopping publisher")
