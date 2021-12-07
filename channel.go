@@ -93,18 +93,32 @@ func (chManager *channelManager) reconnectWithBackoff() {
 
 // reconnect safely closes the current channel and obtains a new one
 func (chManager *channelManager) reconnect() error {
-	chManager.channelMux.Lock()
-	defer chManager.channelMux.Unlock()
+	err := chManager.close()
+	if err != nil {
+		return err
+	}
+
 	newConn, newChannel, err := getNewChannel(chManager.url, chManager.config)
 	if err != nil {
 		return err
 	}
 
-	chManager.channel.Close()
-	chManager.connection.Close()
-
+	chManager.channelMux.Lock()
+	defer chManager.channelMux.Unlock()
 	chManager.connection = newConn
 	chManager.channel = newChannel
 	go chManager.startNotifyCancelOrClosed()
+	return nil
+}
+
+// close safely closes the current channel
+func (chManager *channelManager) close() error {
+	chManager.channelMux.Lock()
+	defer chManager.channelMux.Unlock()
+
+	err := chManager.connection.Close()
+	if err != nil {
+		return err
+	}
 	return nil
 }
