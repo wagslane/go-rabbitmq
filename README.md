@@ -62,17 +62,21 @@ if err != nil {
     log.Fatal(err)
 }
 err = consumer.StartConsuming(
-    func(d rabbitmq.Delivery) rabbitmq.Action {
-        log.Printf("consumed: %v", string(d.Body))
-        // rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
-        return rabbitmq.Ack
-    },
-    "my_queue",
-    []string{"routing_key1", "routing_key2"},
-    rabbitmq.WithConsumeOptionsConcurrency(10),
-    rabbitmq.WithConsumeOptionsQueueDurable,
-    rabbitmq.WithConsumeOptionsQuorum,
-)
+		func(d rabbitmq.Delivery) rabbitmq.Action {
+			log.Printf("consumed: %v", string(d.Body))
+			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+			return rabbitmq.Ack
+		},
+		"my_queue",
+		[]string{"routing_key", "routing_key_2"},
+		rabbitmq.WithConsumeOptionsConcurrency(10),
+		rabbitmq.WithConsumeOptionsQueueDurable,
+		rabbitmq.WithConsumeOptionsQuorum,
+		rabbitmq.WithConsumeOptionsBindingExchangeName("events"),
+		rabbitmq.WithConsumeOptionsBindingExchangeKind("topic"),
+		rabbitmq.WithConsumeOptionsBindingExchangeDurable,
+		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
+	)
 if err != nil {
     log.Fatal(err)
 }
@@ -106,12 +110,12 @@ if err != nil {
     log.Fatal(err)
 }
 err = publisher.Publish(
-    []byte("hello, world"),
-    []string{"routing_key"},
-    // leave blank for defaults
-    rabbitmq.WithPublishOptionsContentType("application/json"),
-    rabbitmq.WithPublishOptionsMandatory,
-    rabbitmq.WithPublishOptionsPersistentDelivery,
+	[]byte("hello, world"),
+	[]string{"routing_key"},
+	rabbitmq.WithPublishOptionsContentType("application/json"),
+	rabbitmq.WithPublishOptionsMandatory,
+	rabbitmq.WithPublishOptionsPersistentDelivery,
+	rabbitmq.WithPublishOptionsExchange("events"),
 )
 if err != nil {
     log.Fatal(err)
@@ -123,6 +127,10 @@ go func() {
     }
 }()
 ```
+
+## Other usage examples
+
+See the [examples](examples) directory for more ideas.
 
 ## 💬 Contact
 
