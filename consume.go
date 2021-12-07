@@ -90,12 +90,9 @@ func (consumer Consumer) StartConsuming(
 	optionFuncs ...func(*ConsumeOptions),
 ) error {
 	defaultOptions := getDefaultConsumeOptions()
-	options := &ConsumeOptions{}
+	options := &defaultOptions
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
-	}
-	if options.Concurrency < 1 {
-		options.Concurrency = defaultOptions.Concurrency
 	}
 
 	err := consumer.startGoroutines(

@@ -46,7 +46,7 @@ func getNewChannel(url string, conf amqp.Config) (*amqp.Connection, *amqp.Channe
 	if err != nil {
 		return nil, nil, err
 	}
-	return amqpConn, ch, err
+	return amqpConn, ch, nil
 }
 
 // startNotifyCancelOrClosed listens on the channel's cancelled and closed
