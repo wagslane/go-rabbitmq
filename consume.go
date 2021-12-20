@@ -14,8 +14,12 @@ type Action int
 type Handler func(d Delivery) (action Action)
 
 const (
+	// NoAction skip acknowledgement for this msg.
+	// Note: Acknowledgement can be performed later by calling an appropriate rabbitmq.Delivery
+	// Ack, Nack or Reject method.
+	NoAction Action = iota - 1
 	// Ack default ack this msg after you have successfully processed this delivery.
-	Ack Action = iota
+	Ack
 	// NackDiscard the message will be dropped or delivered to a server configured dead-letter queue.
 	NackDiscard
 	// NackRequeue deliver this message to a different consumer.
