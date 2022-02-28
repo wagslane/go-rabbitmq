@@ -21,6 +21,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// wait for server to acknowledge the cancel
+	noWait := false
+	defer consumer.Disconnect()
+	defer consumer.StopConsuming(consumerName, noWait)
+
 	err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) rabbitmq.Action {
 			log.Printf("consumed: %v", string(d.Body))
@@ -57,9 +63,4 @@ func main() {
 	fmt.Println("awaiting signal")
 	<-done
 	fmt.Println("stopping consumer")
-
-	// wait for server to acknowledge the cancel
-	noWait := false
-	consumer.StopConsuming(consumerName, noWait)
-	consumer.Disconnect()
 }

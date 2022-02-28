@@ -1,4 +1,5 @@
 // Copyright (c) 2021 VMware, Inc. or its affiliates. All Rights Reserved.
+// Copyright (c) 2012-2021, Sean Treadway, SoundCloud Ltd.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -156,6 +157,23 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	})
 }
 
+// DialTLS_ExternalAuth accepts a string in the AMQP URI format and returns a
+// new Connection over TCP using EXTERNAL auth. Defaults to a server heartbeat
+// interval of 10 seconds and sets the initial read deadline to 30 seconds.
+//
+// This mechanism is used, when RabbitMQ is configured for EXTERNAL auth with
+// ssl_cert_login plugin for userless/passwordless logons
+//
+// DialTLS_ExternalAuth uses the provided tls.Config when encountering an
+// amqps:// scheme.
+func DialTLS_ExternalAuth(url string, amqps *tls.Config) (*Connection, error) {
+	return DialConfig(url, Config{
+		Heartbeat:       defaultHeartbeat,
+		TLSClientConfig: amqps,
+		SASL:            []Authentication{&ExternalAuth{}},
+	})
+}
+
 // DialConfig accepts a string in the AMQP URI format and a configuration for
 // the transport and connection setup, returning a new Connection.  Defaults to
 // a server heartbeat interval of 10 seconds and sets the initial read deadline
@@ -262,7 +280,8 @@ func (c *Connection) ConnectionState() tls.ConnectionState {
 NotifyClose registers a listener for close events either initiated by an error
 accompanying a connection.close method or by a normal shutdown.
 
-On normal shutdowns, the chan will be closed.
+The chan provided will be closed when the Channel is closed and on a
+graceful close, no error will be sent.
 
 To reconnect after a transport or protocol error, register a listener here and
 re-run your setup process.

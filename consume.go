@@ -254,33 +254,35 @@ func (consumer Consumer) startGoroutines(
 	}
 
 	for i := 0; i < consumeOptions.Concurrency; i++ {
-		go func() {
-			for msg := range msgs {
-				if consumeOptions.ConsumerAutoAck {
-					handler(Delivery{msg})
-					continue
-				}
-				switch handler(Delivery{msg}) {
-				case Ack:
-					err := msg.Ack(false)
-					if err != nil {
-						consumer.logger.Printf("can't ack message: %v", err)
-					}
-				case NackDiscard:
-					err := msg.Nack(false, false)
-					if err != nil {
-						consumer.logger.Printf("can't nack message: %v", err)
-					}
-				case NackRequeue:
-					err := msg.Nack(false, true)
-					if err != nil {
-						consumer.logger.Printf("can't nack message: %v", err)
-					}
-				}
-			}
-			consumer.logger.Printf("rabbit consumer goroutine closed")
-		}()
+		go handlerGoroutine(consumer, msgs, consumeOptions, handler)
 	}
 	consumer.logger.Printf("Processing messages on %v goroutines", consumeOptions.Concurrency)
 	return nil
+}
+
+func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptions ConsumeOptions, handler Handler) {
+	for msg := range msgs {
+		if consumeOptions.ConsumerAutoAck {
+			handler(Delivery{msg})
+			continue
+		}
+		switch handler(Delivery{msg}) {
+		case Ack:
+			err := msg.Ack(false)
+			if err != nil {
+				consumer.logger.Printf("can't ack message: %v", err)
+			}
+		case NackDiscard:
+			err := msg.Nack(false, false)
+			if err != nil {
+				consumer.logger.Printf("can't nack message: %v", err)
+			}
+		case NackRequeue:
+			err := msg.Nack(false, true)
+			if err != nil {
+				consumer.logger.Printf("can't nack message: %v", err)
+			}
+		}
+	}
+	consumer.logger.Printf("rabbit consumer goroutine closed")
 }

@@ -3,10 +3,6 @@ all: test fmt vet lint staticcheck
 test:
 	go test ./...
 
-fmt:
-	go list -f '{{.Dir}}' ./... | grep -v /vendor/ | xargs -L1 gofmt -l
-	test -z $$(go list -f '{{.Dir}}' ./... | grep -v /vendor/ | xargs -L1 gofmt -l)
-
 vet:
 	go vet ./...
 
