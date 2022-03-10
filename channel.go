@@ -59,8 +59,7 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 
 	select {
 	case err := <-notifyCloseChan:
-		// If the connection close is triggered by the Server, a reconnection takes place
-		if err != nil && err.Server {
+		if err != nil {
 			chManager.logger.Printf("attempting to reconnect to amqp server after close")
 			chManager.reconnectWithBackoff()
 			chManager.logger.Printf("successfully reconnected to amqp server after close")
