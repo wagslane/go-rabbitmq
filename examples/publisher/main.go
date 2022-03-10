@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
+	rabbitmq "github.com/fortyanov/go-rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 func main() {

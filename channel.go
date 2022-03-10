@@ -76,11 +76,9 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 // reconnectWithBackoff continuously attempts to reconnect with an
 // exponential backoff strategy
 func (chManager *channelManager) reconnectWithBackoff() {
-	backoffTime := time.Second
 	for {
-		chManager.logger.Printf("waiting %s seconds to attempt to reconnect to amqp server", backoffTime)
-		time.Sleep(backoffTime)
-		backoffTime *= 2
+		chManager.logger.Printf("waiting 5 seconds to attempt to reconnect to amqp server")
+		time.Sleep(5 * time.Second)
 		err := chManager.reconnect()
 		if err != nil {
 			chManager.logger.Printf("error reconnecting to amqp server: %v", err)

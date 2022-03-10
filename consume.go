@@ -153,11 +153,9 @@ func (consumer Consumer) startGoroutinesWithRetries(
 	routingKeys []string,
 	consumeOptions ConsumeOptions,
 ) {
-	backoffTime := time.Second
 	for {
-		consumer.logger.Printf("waiting %s seconds to attempt to start consumer goroutines", backoffTime)
-		time.Sleep(backoffTime)
-		backoffTime *= 2
+		consumer.logger.Printf("waiting 5 seconds to attempt to start consumer goroutines")
+		time.Sleep(5 * time.Second)
 		err := consumer.startGoroutines(
 			handler,
 			queue,

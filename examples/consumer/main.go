@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	rabbitmq "github.com/fortyanov/go-rabbitmq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 var consumerName = "example"
