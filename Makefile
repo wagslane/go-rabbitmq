@@ -1,4 +1,4 @@
-all: test fmt vet lint staticcheck
+all: test vet lint staticcheck
 
 test:
 	go test ./...
