@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"fmt"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -107,13 +106,16 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Printf("gorabbit: successful recovery from: %v", err)
-			consumer.startGoroutinesWithRetries(
+			consumer.logger.Printf("successful recovery from: %v", err)
+			err = consumer.startGoroutines(
 				handler,
 				queue,
 				routingKeys,
 				*options,
 			)
+			if err != nil {
+				consumer.logger.Printf("error restarting consumer goroutines after cancel or close: %v", err)
+			}
 		}
 	}()
 	return nil
@@ -143,33 +145,6 @@ func (consumer Consumer) Disconnect() {
 // use them in a for to stop all the consumers.
 func (consumer Consumer) StopConsuming(consumerName string, noWait bool) {
 	consumer.chManager.channel.Cancel(consumerName, noWait)
-}
-
-// startGoroutinesWithRetries attempts to start consuming on a channel
-// with an exponential backoff
-func (consumer Consumer) startGoroutinesWithRetries(
-	handler Handler,
-	queue string,
-	routingKeys []string,
-	consumeOptions ConsumeOptions,
-) {
-	backoffTime := time.Second
-	for {
-		consumer.logger.Printf("waiting %s seconds to attempt to start consumer goroutines", backoffTime)
-		time.Sleep(backoffTime)
-		backoffTime *= 2
-		err := consumer.startGoroutines(
-			handler,
-			queue,
-			routingKeys,
-			consumeOptions,
-		)
-		if err != nil {
-			consumer.logger.Printf("couldn't start consumer goroutines. err: %v", err)
-			continue
-		}
-		break
-	}
 }
 
 // startGoroutines declares the queue if it doesn't exist,

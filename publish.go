@@ -106,7 +106,7 @@ func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*Publisher
 
 func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.chManager.notifyCancelOrClose {
-		publisher.options.Logger.Printf("gorabbit: successful publisher recovery from: %v", err)
+		publisher.options.Logger.Printf("successful publisher recovery from: %v", err)
 		go publisher.startNotifyFlowHandler()
 		if publisher.notifyReturnChan != nil {
 			go publisher.startNotifyReturnHandler()

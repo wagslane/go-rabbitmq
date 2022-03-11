@@ -66,6 +66,12 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 			chManager.logger.Printf("successfully reconnected to amqp server after close")
 			chManager.notifyCancelOrClose <- err
 		}
+		if err != nil {
+			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client")
+		}
+		if err == nil {
+			chManager.logger.Printf("amqp channel closed gracefully")
+		}
 	case err := <-notifyCancelChan:
 		chManager.logger.Printf("attempting to reconnect to amqp server after cancel")
 		chManager.reconnectWithBackoff()
