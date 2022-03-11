@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -50,8 +51,17 @@ type Publisher struct {
 // PublisherOptions are used to describe a publisher's configuration.
 // Logging set to true will enable the consumer to print to stdout
 type PublisherOptions struct {
-	Logging bool
-	Logger  Logger
+	Logging           bool
+	Logger            Logger
+	ReconnectInterval time.Duration
+}
+
+// WithPublisherOptionsReconnectInterval sets the interval at which the publisher will
+// attempt to reconnect to the rabbit server
+func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func(options *ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.ReconnectInterval = reconnectInterval
+	}
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
@@ -75,15 +85,16 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(url string, config amqp.Config, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
-	options := &PublisherOptions{}
+	options := &PublisherOptions{
+		Logging:           true,
+		Logger:            &stdLogger{},
+		ReconnectInterval: time.Second * 5,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
-	if options.Logger == nil {
-		options.Logger = &noLogger{} // default no logging
-	}
 
-	chManager, err := newChannelManager(url, config, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger, options.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
