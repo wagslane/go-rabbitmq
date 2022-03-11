@@ -132,6 +132,10 @@ go func() {
 
 See the [examples](examples) directory for more ideas.
 
+## Stability
+
+Note that the API is currently in `v0`. I don't plan on any huge changes, but there may be some small breaking changes before we hit `v1`.
+
 ## 💬 Contact
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/wagslane.svg?label=Follow%20Wagslane&style=social)](https://twitter.com/intent/follow?screen_name=wagslane)
