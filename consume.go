@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"fmt"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -31,8 +32,9 @@ type Consumer struct {
 // Logging set to true will enable the consumer to print to stdout
 // Logger specifies a custom Logger interface implementation overruling Logging.
 type ConsumerOptions struct {
-	Logging bool
-	Logger  Logger
+	Logging           bool
+	Logger            Logger
+	ReconnectInterval time.Duration
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -44,15 +46,16 @@ type Delivery struct {
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
 func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
-	options := &ConsumerOptions{}
+	options := &ConsumerOptions{
+		Logging:           true,
+		Logger:            &stdLogger{},
+		ReconnectInterval: time.Second * 5,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
-	if options.Logger == nil {
-		options.Logger = &noLogger{} // default no logging
-	}
 
-	chManager, err := newChannelManager(url, config, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger, options.ReconnectInterval)
 	if err != nil {
 		return Consumer{}, err
 	}
@@ -61,6 +64,14 @@ func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOp
 		logger:    options.Logger,
 	}
 	return consumer, nil
+}
+
+// WithConsumerOptionsReconnectInterval sets the interval at which the consumer will
+// attempt to reconnect to the rabbit server
+func WithConsumerOptionsReconnectInterval(reconnectInterval time.Duration) func(options *ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.ReconnectInterval = reconnectInterval
+	}
 }
 
 // WithConsumerOptionsLogging sets a logger to log to stdout
