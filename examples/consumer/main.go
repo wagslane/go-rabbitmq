@@ -23,7 +23,7 @@ func main() {
 	}
 
 	// wait for server to acknowledge the cancel
-	noWait := false
+	const noWait = false
 	defer consumer.Disconnect()
 	defer consumer.StopConsuming(consumerName, noWait)
 
