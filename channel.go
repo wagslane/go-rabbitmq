@@ -68,7 +68,7 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 			chManager.notifyCancelOrClose <- err
 		} else if err != nil && err.Reason == "EOF" {
 			chManager.logger.Printf("attempting to reconnect to amqp server after eof")
-			chManager.reconnectWithBackoff()
+			chManager.reconnectLoop()
 			chManager.logger.Printf("successfully reconnected to amqp server after eof")
 			chManager.notifyCancelOrClose <- err
 		} else if err != nil {
