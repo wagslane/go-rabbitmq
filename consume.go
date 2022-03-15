@@ -32,8 +32,9 @@ type Consumer struct {
 // Logging set to true will enable the consumer to print to stdout
 // Logger specifies a custom Logger interface implementation overruling Logging.
 type ConsumerOptions struct {
-	Logging bool
-	Logger  Logger
+	Logging           bool
+	Logger            Logger
+	ReconnectInterval time.Duration
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -45,15 +46,16 @@ type Delivery struct {
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
 func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
-	options := &ConsumerOptions{}
+	options := &ConsumerOptions{
+		Logging:           true,
+		Logger:            &stdLogger{},
+		ReconnectInterval: time.Second * 5,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
-	if options.Logger == nil {
-		options.Logger = &noLogger{} // default no logging
-	}
 
-	chManager, err := newChannelManager(url, config, options.Logger)
+	chManager, err := newChannelManager(url, config, options.Logger, options.ReconnectInterval)
 	if err != nil {
 		return Consumer{}, err
 	}
@@ -62,6 +64,14 @@ func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOp
 		logger:    options.Logger,
 	}
 	return consumer, nil
+}
+
+// WithConsumerOptionsReconnectInterval sets the interval at which the consumer will
+// attempt to reconnect to the rabbit server
+func WithConsumerOptionsReconnectInterval(reconnectInterval time.Duration) func(options *ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.ReconnectInterval = reconnectInterval
+	}
 }
 
 // WithConsumerOptionsLogging sets a logger to log to stdout
@@ -107,13 +117,16 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Printf("gorabbit: successful recovery from: %v", err)
-			consumer.startGoroutinesWithRetries(
+			consumer.logger.Printf("successful recovery from: %v", err)
+			err = consumer.startGoroutines(
 				handler,
 				queue,
 				routingKeys,
 				*options,
 			)
+			if err != nil {
+				consumer.logger.Printf("error restarting consumer goroutines after cancel or close: %v", err)
+			}
 		}
 	}()
 	return nil
@@ -143,33 +156,6 @@ func (consumer Consumer) Disconnect() {
 // use them in a for to stop all the consumers.
 func (consumer Consumer) StopConsuming(consumerName string, noWait bool) {
 	consumer.chManager.channel.Cancel(consumerName, noWait)
-}
-
-// startGoroutinesWithRetries attempts to start consuming on a channel
-// with an exponential backoff
-func (consumer Consumer) startGoroutinesWithRetries(
-	handler Handler,
-	queue string,
-	routingKeys []string,
-	consumeOptions ConsumeOptions,
-) {
-	backoffTime := time.Second
-	for {
-		consumer.logger.Printf("waiting %s seconds to attempt to start consumer goroutines", backoffTime)
-		time.Sleep(backoffTime)
-		backoffTime *= 2
-		err := consumer.startGoroutines(
-			handler,
-			queue,
-			routingKeys,
-			consumeOptions,
-		)
-		if err != nil {
-			consumer.logger.Printf("couldn't start consumer goroutines. err: %v", err)
-			continue
-		}
-		break
-	}
 }
 
 // startGoroutines declares the queue if it doesn't exist,
