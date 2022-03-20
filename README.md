@@ -32,7 +32,7 @@ go get github.com/wagslane/go-rabbitmq
 ### Default options
 
 ```go
-consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", amqp.Config{})
+consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", amqp091.Config{})
 if err != nil {
     log.Fatal(err)
 }
