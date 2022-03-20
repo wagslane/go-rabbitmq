@@ -61,12 +61,20 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 
 	select {
 	case err := <-notifyCloseChan:
-		// If the connection close is triggered by the Server, a reconnection takes place
 		if err != nil && err.Server {
 			chManager.logger.Printf("attempting to reconnect to amqp server after close")
 			chManager.reconnectLoop()
 			chManager.logger.Printf("successfully reconnected to amqp server after close")
 			chManager.notifyCancelOrClose <- err
+		} else if err != nil && err.Reason == "EOF" {
+			chManager.logger.Printf("attempting to reconnect to amqp server after eof")
+			chManager.reconnectLoop()
+			chManager.logger.Printf("successfully reconnected to amqp server after eof")
+			chManager.notifyCancelOrClose <- err
+		} else if err != nil {
+			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client")
+		} else if err == nil {
+			chManager.logger.Printf("amqp channel closed gracefully")
 		}
 		if err != nil {
 			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client")
