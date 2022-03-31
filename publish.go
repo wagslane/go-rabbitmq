@@ -58,8 +58,8 @@ type PublisherOptions struct {
 
 // WithPublisherOptionsReconnectInterval sets the interval at which the publisher will
 // attempt to reconnect to the rabbit server
-func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func(options *ConsumerOptions) {
-	return func(options *ConsumerOptions) {
+func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
 		options.ReconnectInterval = reconnectInterval
 	}
 }
