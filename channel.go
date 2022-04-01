@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,6 +71,11 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 			chManager.logger.Printf("attempting to reconnect to amqp server after eof")
 			chManager.reconnectLoop()
 			chManager.logger.Printf("successfully reconnected to amqp server after eof")
+			chManager.notifyCancelOrClose <- err
+		} else if err != nil && strings.Contains(err.Error(), "timeout") {
+			chManager.logger.Printf("attempting to reconnect to amqp server after timeout")
+			chManager.reconnectLoop()
+			chManager.logger.Printf("successfully reconnected to amqp server after timeout")
 			chManager.notifyCancelOrClose <- err
 		} else if err != nil {
 			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client: %v", err)
