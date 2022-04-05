@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
@@ -19,7 +18,7 @@ func main() {
 	mylogger := &customLogger{}
 
 	publisher, err := rabbitmq.NewPublisher(
-		"amqp://guest:guest@localhost", amqp.Config{},
+		"amqp://guest:guest@localhost", rabbitmq.Config{},
 		rabbitmq.WithPublisherOptionsLogger(mylogger),
 	)
 	if err != nil {

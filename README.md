@@ -32,10 +32,14 @@ go get github.com/wagslane/go-rabbitmq
 ### Default options
 
 ```go
-consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", amqp091.Config{})
+consumer, err := rabbitmq.NewConsumer(
+    "amqp://guest:guest@localhost", rabbitmq.Config{},
+    rabbitmq.WithConsumerOptionsLogging,
+)
 if err != nil {
     log.Fatal(err)
 }
+defer consumer.Close()
 err = consumer.StartConsuming(
     func(d rabbitmq.Delivery) rabbitmq.Action {
         log.Printf("consumed: %v", string(d.Body))
@@ -55,12 +59,13 @@ if err != nil {
 ```go
 consumer, err := rabbitmq.NewConsumer(
     "amqp://user:pass@localhost",
-    amqp091.Config{},
+    rabbitmq.Config{},
     rabbitmq.WithConsumerOptionsLogging,
 )
 if err != nil {
     log.Fatal(err)
 }
+defer consumer.Close()
 err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) rabbitmq.Action {
 			log.Printf("consumed: %v", string(d.Body))
@@ -87,10 +92,11 @@ if err != nil {
 ### Default options
 
 ```go
-publisher, returns, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", amqp091.Config{})
+publisher, returns, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", rabbitmq.Config{})
 if err != nil {
     log.Fatal(err)
 }
+defer publisher.Close()
 err = publisher.Publish([]byte("hello, world"), []string{"routing_key"})
 if err != nil {
     log.Fatal(err)
@@ -102,10 +108,11 @@ if err != nil {
 ```go
 publisher, returns, err := rabbitmq.NewPublisher(
     "amqp://user:pass@localhost",
-    amqp091.Config{},
+    rabbitmq.Config{},
     // can pass nothing for no logging
     rabbitmq.WithPublisherOptionsLogging,
 )
+defer publisher.Close()
 if err != nil {
     log.Fatal(err)
 }

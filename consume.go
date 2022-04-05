@@ -45,7 +45,7 @@ type Delivery struct {
 }
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
-func NewConsumer(url string, config amqp.Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
+func NewConsumer(url string, config Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
 	options := &ConsumerOptions{
 		Logging:           true,
 		Logger:            &stdLogger{},
@@ -132,30 +132,11 @@ func (consumer Consumer) StartConsuming(
 	return nil
 }
 
-// Disconnect disconnects both the channel and the connection.
-// This method doesn't throw a reconnect, and should be used when finishing a program.
-// IMPORTANT: If this method is executed before StopConsuming, it could cause unexpected behavior
-// such as messages being processed, but not being acknowledged, thus being requeued by the broker
-func (consumer Consumer) Disconnect() {
-	consumer.chManager.channel.Close()
-	consumer.chManager.connection.Close()
-}
-
-// StopConsuming stops the consumption of messages.
-// The consumer should be discarded as it's not safe for re-use.
-// This method sends a basic.cancel notification.
-// The consumerName is the name or delivery tag of the amqp consumer we want to cancel.
-// When noWait is true, do not wait for the server to acknowledge the cancel.
-// Only use this when you are certain there are no deliveries in flight that
-// require an acknowledgment, otherwise they will arrive and be dropped in the
-// client without an ack, and will not be redelivered to other consumers.
-// IMPORTANT: Since the streadway library doesn't provide a way to retrieve the consumer's tag after the creation
-// it's imperative for you to set the name when creating the consumer, if you want to use this function later
-// a simple uuid4 should do the trick, since it should be unique.
-// If you start many consumers, you should store the name of the consumers when creating them, such that you can
-// use them in a for to stop all the consumers.
-func (consumer Consumer) StopConsuming(consumerName string, noWait bool) {
-	consumer.chManager.channel.Cancel(consumerName, noWait)
+// Close cleans up resources and closes the consumer.
+// The consumer is not safe for reuse
+func (consumer Consumer) Close() error {
+	consumer.chManager.logger.Printf("closing consumer...")
+	return consumer.chManager.close()
 }
 
 // startGoroutines declares the queue if it doesn't exist,

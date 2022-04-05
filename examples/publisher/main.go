@@ -8,18 +8,23 @@ import (
 	"syscall"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
 func main() {
 	publisher, err := rabbitmq.NewPublisher(
-		"amqp://guest:guest@localhost", amqp.Config{},
+		"amqp://guest:guest@localhost", rabbitmq.Config{},
 		rabbitmq.WithPublisherOptionsLogging,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		err := publisher.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	returns := publisher.NotifyReturn()
 	go func() {
@@ -67,11 +72,6 @@ func main() {
 			}
 		case <-done:
 			fmt.Println("stopping publisher")
-			err := publisher.StopPublishing()
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println("publisher stopped")
 			return
 		}
 	}

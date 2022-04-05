@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,13 +13,13 @@ type channelManager struct {
 	url                 string
 	channel             *amqp.Channel
 	connection          *amqp.Connection
-	amqpConfig          amqp.Config
+	amqpConfig          Config
 	channelMux          *sync.RWMutex
 	notifyCancelOrClose chan error
 	reconnectInterval   time.Duration
 }
 
-func newChannelManager(url string, conf amqp.Config, log Logger, reconnectInterval time.Duration) (*channelManager, error) {
+func newChannelManager(url string, conf Config, log Logger, reconnectInterval time.Duration) (*channelManager, error) {
 	conn, ch, err := getNewChannel(url, conf)
 	if err != nil {
 		return nil, err
@@ -40,8 +39,8 @@ func newChannelManager(url string, conf amqp.Config, log Logger, reconnectInterv
 	return &chManager, nil
 }
 
-func getNewChannel(url string, conf amqp.Config) (*amqp.Connection, *amqp.Channel, error) {
-	amqpConn, err := amqp.DialConfig(url, conf)
+func getNewChannel(url string, conf Config) (*amqp.Connection, *amqp.Channel, error) {
+	amqpConn, err := amqp.DialConfig(url, amqp.Config(conf))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,31 +58,13 @@ func getNewChannel(url string, conf amqp.Config) (*amqp.Connection, *amqp.Channe
 func (chManager *channelManager) startNotifyCancelOrClosed() {
 	notifyCloseChan := chManager.channel.NotifyClose(make(chan *amqp.Error, 1))
 	notifyCancelChan := chManager.channel.NotifyCancel(make(chan string, 1))
-
 	select {
 	case err := <-notifyCloseChan:
-		if err != nil && err.Server {
-			chManager.logger.Printf("attempting to reconnect to amqp server after close")
-			chManager.reconnectLoop()
-			chManager.logger.Printf("successfully reconnected to amqp server after close")
-			chManager.notifyCancelOrClose <- err
-		} else if err != nil && err.Reason == "EOF" {
-			chManager.logger.Printf("attempting to reconnect to amqp server after eof")
-			chManager.reconnectLoop()
-			chManager.logger.Printf("successfully reconnected to amqp server after eof")
-			chManager.notifyCancelOrClose <- err
-		} else if err != nil && strings.Contains(err.Error(), "timeout") {
-			chManager.logger.Printf("attempting to reconnect to amqp server after timeout")
-			chManager.reconnectLoop()
-			chManager.logger.Printf("successfully reconnected to amqp server after timeout")
-			chManager.notifyCancelOrClose <- err
-		} else if err != nil {
-			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client: %v", err)
-		} else if err == nil {
-			chManager.logger.Printf("amqp channel closed gracefully")
-		}
 		if err != nil {
-			chManager.logger.Printf("not attempting to reconnect to amqp server because closure was initiated by the client")
+			chManager.logger.Printf("attempting to reconnect to amqp server from error: %v", err)
+			chManager.reconnectLoop()
+			chManager.logger.Printf("successfully reconnected to amqp server")
+			chManager.notifyCancelOrClose <- err
 		}
 		if err == nil {
 			chManager.logger.Printf("amqp channel closed gracefully")
@@ -128,12 +109,17 @@ func (chManager *channelManager) reconnect() error {
 	return nil
 }
 
-// close safely closes the current channel
+// close safely closes the current channel and connection
 func (chManager *channelManager) close() error {
 	chManager.channelMux.Lock()
 	defer chManager.channelMux.Unlock()
 
-	err := chManager.connection.Close()
+	err := chManager.channel.Close()
+	if err != nil {
+		return err
+	}
+
+	err = chManager.connection.Close()
 	if err != nil {
 		return err
 	}

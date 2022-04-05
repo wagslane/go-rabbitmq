@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
@@ -15,17 +14,21 @@ var consumerName = "example"
 
 func main() {
 	consumer, err := rabbitmq.NewConsumer(
-		"amqp://guest:guest@localhost", amqp.Config{},
+		"amqp://guest:guest@localhost", rabbitmq.Config{},
 		rabbitmq.WithConsumerOptionsLogging,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		err := consumer.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// wait for server to acknowledge the cancel
 	const noWait = false
-	defer consumer.Disconnect()
-	defer consumer.StopConsuming(consumerName, noWait)
 
 	err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) rabbitmq.Action {
