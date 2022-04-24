@@ -27,9 +27,6 @@ func main() {
 		}
 	}()
 
-	// wait for server to acknowledge the cancel
-	const noWait = false
-
 	err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) rabbitmq.Action {
 			log.Printf("consumed: %v", string(d.Body))

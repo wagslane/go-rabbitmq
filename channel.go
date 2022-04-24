@@ -17,6 +17,7 @@ type channelManager struct {
 	channelMux          *sync.RWMutex
 	notifyCancelOrClose chan error
 	reconnectInterval   time.Duration
+	reconnectionCount   uint
 }
 
 func newChannelManager(url string, conf Config, log Logger, reconnectInterval time.Duration) (*channelManager, error) {
@@ -86,6 +87,8 @@ func (chManager *channelManager) reconnectLoop() {
 		if err != nil {
 			chManager.logger.Printf("error reconnecting to amqp server: %v", err)
 		} else {
+			chManager.reconnectionCount++
+			go chManager.startNotifyCancelOrClosed()
 			return
 		}
 	}
@@ -105,7 +108,6 @@ func (chManager *channelManager) reconnect() error {
 
 	chManager.connection = newConn
 	chManager.channel = newChannel
-	go chManager.startNotifyCancelOrClosed()
 	return nil
 }
 

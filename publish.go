@@ -30,9 +30,11 @@ type Return struct {
 }
 
 // Confirmation notifies the acknowledgment or negative acknowledgement of a publishing identified by its delivery tag.
-// Use NotifyPublish to consume these events.
+// Use NotifyPublish to consume these events. ReconnectionCount is useful in that each time it increments, the DeliveryTag
+// is reset to 0, meaning you can use ReconnectionCount+DeliveryTag to ensure uniqueness
 type Confirmation struct {
 	amqp.Confirmation
+	ReconnectionCount int
 }
 
 // Publisher allows you to publish messages safely across an open connection
@@ -235,7 +237,10 @@ func (publisher *Publisher) startNotifyPublishHandler() {
 	go func() {
 		publishAMQPCh := publisher.chManager.channel.NotifyPublish(make(chan amqp.Confirmation, 1))
 		for conf := range publishAMQPCh {
-			publisher.notifyPublishChan <- Confirmation{conf}
+			publisher.notifyPublishChan <- Confirmation{
+				Confirmation:      conf,
+				ReconnectionCount: int(publisher.chManager.reconnectionCount),
+			}
 		}
 	}()
 }
