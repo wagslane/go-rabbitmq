@@ -61,7 +61,7 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 	select {
 	case err := <-notifyCloseChan:
 		if err != nil {
-			chManager.logger.Printf("attempting to reconnect to amqp server from error: %v", err)
+			chManager.logger.Printf("attempting to reconnect to amqp server after close with error: %v", err)
 			chManager.reconnectLoop()
 			chManager.logger.Printf("successfully reconnected to amqp server")
 			chManager.notifyCancelOrClose <- err
@@ -70,7 +70,7 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 			chManager.logger.Printf("amqp channel closed gracefully")
 		}
 	case err := <-notifyCancelChan:
-		chManager.logger.Printf("attempting to reconnect to amqp server after cancel")
+		chManager.logger.Printf("attempting to reconnect to amqp server after cancel with error: %s", err)
 		chManager.reconnectLoop()
 		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
