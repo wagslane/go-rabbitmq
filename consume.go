@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -117,7 +118,7 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Printf("successful recovery from: %v", err)
+			consumer.logger.Error(fmt.Sprintf("successful recovery from: %v", err))
 			err = consumer.startGoroutines(
 				handler,
 				queue,
@@ -125,7 +126,7 @@ func (consumer Consumer) StartConsuming(
 				*options,
 			)
 			if err != nil {
-				consumer.logger.Printf("error restarting consumer goroutines after cancel or close: %v", err)
+				consumer.logger.Error(fmt.Sprintf("error restarting consumer goroutines after cancel or close: %v", err))
 			}
 		}
 	}()
@@ -135,7 +136,7 @@ func (consumer Consumer) StartConsuming(
 // Close cleans up resources and closes the consumer.
 // The consumer is not safe for reuse
 func (consumer Consumer) Close() error {
-	consumer.chManager.logger.Printf("closing consumer...")
+	consumer.chManager.logger.Info("closing consumer...")
 	return consumer.chManager.close()
 }
 
@@ -168,7 +169,7 @@ func (consumer Consumer) startGoroutines(
 	if consumeOptions.BindingExchange != nil {
 		exchange := consumeOptions.BindingExchange
 		if exchange.Name == "" {
-			return fmt.Errorf("binding to exchange but name not specified")
+			return errors.New("binding to exchange but name not specified")
 		}
 		if exchange.Declare {
 			err := consumer.chManager.channel.ExchangeDeclare(
@@ -223,7 +224,7 @@ func (consumer Consumer) startGoroutines(
 	for i := 0; i < consumeOptions.Concurrency; i++ {
 		go handlerGoroutine(consumer, msgs, consumeOptions, handler)
 	}
-	consumer.logger.Printf("Processing messages on %v goroutines", consumeOptions.Concurrency)
+	consumer.logger.Info(fmt.Sprintf("Processing messages on %v goroutines", consumeOptions.Concurrency))
 	return nil
 }
 
@@ -237,19 +238,19 @@ func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptio
 		case Ack:
 			err := msg.Ack(false)
 			if err != nil {
-				consumer.logger.Printf("can't ack message: %v", err)
+				consumer.logger.Error(fmt.Sprintf("can't ack message: %v", err))
 			}
 		case NackDiscard:
 			err := msg.Nack(false, false)
 			if err != nil {
-				consumer.logger.Printf("can't nack message: %v", err)
+				consumer.logger.Error(fmt.Sprintf("can't nack message: %v", err))
 			}
 		case NackRequeue:
 			err := msg.Nack(false, true)
 			if err != nil {
-				consumer.logger.Printf("can't nack message: %v", err)
+				consumer.logger.Error(fmt.Sprintf("can't nack message: %v", err))
 			}
 		}
 	}
-	consumer.logger.Printf("rabbit consumer goroutine closed")
+	consumer.logger.Debug("rabbit consumer goroutine closed")
 }

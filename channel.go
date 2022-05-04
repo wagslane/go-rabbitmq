@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -62,18 +63,20 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 	select {
 	case err := <-notifyCloseChan:
 		if err != nil {
-			chManager.logger.Printf("attempting to reconnect to amqp server after close with error: %v", err)
+			chManager.logger.Error(fmt.Sprintf("connection to amqp server closed with error: %v", err))
+			chManager.logger.Info("attempting to reconnect to amqp server after close")
 			chManager.reconnectLoop()
-			chManager.logger.Printf("successfully reconnected to amqp server")
+			chManager.logger.Info("successfully reconnected to amqp server after close")
 			chManager.notifyCancelOrClose <- err
 		}
 		if err == nil {
-			chManager.logger.Printf("amqp channel closed gracefully")
+			chManager.logger.Info("amqp channel closed gracefully")
 		}
 	case err := <-notifyCancelChan:
-		chManager.logger.Printf("attempting to reconnect to amqp server after cancel with error: %s", err)
+		chManager.logger.Error(fmt.Sprintf("connection to amqp server cancelled with error: %v", err))
+		chManager.logger.Info("attempting to reconnect to amqp server after cancel")
 		chManager.reconnectLoop()
-		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
+		chManager.logger.Info("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
 	}
 }
@@ -81,11 +84,11 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 // reconnectLoop continuously attempts to reconnect
 func (chManager *channelManager) reconnectLoop() {
 	for {
-		chManager.logger.Printf("waiting %s seconds to attempt to reconnect to amqp server", chManager.reconnectInterval)
+		chManager.logger.Debug(fmt.Sprintf("waiting %s seconds to attempt to reconnect to amqp server", chManager.reconnectInterval))
 		time.Sleep(chManager.reconnectInterval)
 		err := chManager.reconnect()
 		if err != nil {
-			chManager.logger.Printf("error reconnecting to amqp server: %v", err)
+			chManager.logger.Error(fmt.Sprintf("error reconnecting to amqp server: %v", err))
 		} else {
 			chManager.reconnectionCount++
 			go chManager.startNotifyCancelOrClosed()

@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -119,7 +120,7 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 
 func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.chManager.notifyCancelOrClose {
-		publisher.options.Logger.Printf("successful publisher recovery from: %v", err)
+		publisher.options.Logger.Error(fmt.Sprintf("successful publisher recovery from: %v", err))
 		go publisher.startNotifyFlowHandler()
 		if publisher.notifyReturnChan != nil {
 			go publisher.startNotifyReturnHandler()
@@ -153,7 +154,7 @@ func (publisher *Publisher) Publish(
 ) error {
 	publisher.disablePublishDueToFlowMux.RLock()
 	if publisher.disablePublishDueToFlow {
-		return fmt.Errorf("publishing blocked due to high flow on the server")
+		return errors.New("publishing blocked due to high flow on the server")
 	}
 	publisher.disablePublishDueToFlowMux.RUnlock()
 
@@ -200,7 +201,7 @@ func (publisher *Publisher) Publish(
 // Close closes the publisher and releases resources
 // The publisher should be discarded as it's not safe for re-use
 func (publisher Publisher) Close() error {
-	publisher.chManager.logger.Printf("closing publisher...")
+	publisher.chManager.logger.Info("closing publisher...")
 	return publisher.chManager.close()
 }
 
@@ -215,11 +216,11 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 	for ok := range notifyFlowChan {
 		publisher.disablePublishDueToFlowMux.Lock()
 		if ok {
-			publisher.options.Logger.Printf("pausing publishing due to flow request from server")
+			publisher.options.Logger.Info("pausing publishing due to flow request from server")
 			publisher.disablePublishDueToFlow = true
 		} else {
 			publisher.disablePublishDueToFlow = false
-			publisher.options.Logger.Printf("resuming publishing due to flow request from server")
+			publisher.options.Logger.Info("resuming publishing due to flow request from server")
 		}
 		publisher.disablePublishDueToFlowMux.Unlock()
 	}
