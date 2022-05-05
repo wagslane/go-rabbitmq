@@ -92,7 +92,7 @@ if err != nil {
 ### Default options
 
 ```go
-publisher, _, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", rabbitmq.Config{})
+publisher, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", rabbitmq.Config{})
 if err != nil {
     log.Fatal(err)
 }
