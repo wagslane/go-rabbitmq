@@ -18,6 +18,7 @@ The goal with `go-rabbitmq` is to still provide most all of the nitty-gritty fun
 * Multithreaded consumers via a handler function
 * Reasonable defaults
 * Flow control handling
+* TCP block handling
 
 ## ⚙️ Installation
 
