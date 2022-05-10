@@ -47,6 +47,9 @@ type Publisher struct {
 	disablePublishDueToFlow    bool
 	disablePublishDueToFlowMux *sync.RWMutex
 
+	disablePublishDueToBlocked    bool
+	disablePublishDueToBlockedMux *sync.RWMutex
+
 	options PublisherOptions
 }
 
@@ -102,12 +105,14 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 	}
 
 	publisher := &Publisher{
-		chManager:                  chManager,
-		disablePublishDueToFlow:    false,
-		disablePublishDueToFlowMux: &sync.RWMutex{},
-		options:                    *options,
-		notifyReturnChan:           nil,
-		notifyPublishChan:          nil,
+		chManager:                     chManager,
+		disablePublishDueToFlow:       false,
+		disablePublishDueToFlowMux:    &sync.RWMutex{},
+		disablePublishDueToBlocked:    false,
+		disablePublishDueToBlockedMux: &sync.RWMutex{},
+		options:                       *options,
+		notifyReturnChan:              nil,
+		notifyPublishChan:             nil,
 	}
 
 	go publisher.startNotifyFlowHandler()
@@ -152,10 +157,16 @@ func (publisher *Publisher) Publish(
 	optionFuncs ...func(*PublishOptions),
 ) error {
 	publisher.disablePublishDueToFlowMux.RLock()
+	defer publisher.disablePublishDueToFlowMux.RUnlock()
 	if publisher.disablePublishDueToFlow {
 		return fmt.Errorf("publishing blocked due to high flow on the server")
 	}
-	publisher.disablePublishDueToFlowMux.RUnlock()
+
+	publisher.disablePublishDueToBlockedMux.RLock()
+	defer publisher.disablePublishDueToBlockedMux.RUnlock()
+	if publisher.disablePublishDueToBlocked {
+		return fmt.Errorf("publishing blocked due to TCP block on the server")
+	}
 
 	options := &PublishOptions{}
 	for _, optionFunc := range optionFuncs {
@@ -202,27 +213,6 @@ func (publisher *Publisher) Publish(
 func (publisher Publisher) Close() error {
 	publisher.chManager.logger.Printf("closing publisher...")
 	return publisher.chManager.close()
-}
-
-func (publisher *Publisher) startNotifyFlowHandler() {
-	notifyFlowChan := publisher.chManager.channel.NotifyFlow(make(chan bool))
-	publisher.disablePublishDueToFlowMux.Lock()
-	publisher.disablePublishDueToFlow = false
-	publisher.disablePublishDueToFlowMux.Unlock()
-
-	// Listeners for active=true flow control.  When true is sent to a listener,
-	// publishing should pause until false is sent to listeners.
-	for ok := range notifyFlowChan {
-		publisher.disablePublishDueToFlowMux.Lock()
-		if ok {
-			publisher.options.Logger.Printf("pausing publishing due to flow request from server")
-			publisher.disablePublishDueToFlow = true
-		} else {
-			publisher.disablePublishDueToFlow = false
-			publisher.options.Logger.Printf("resuming publishing due to flow request from server")
-		}
-		publisher.disablePublishDueToFlowMux.Unlock()
-	}
 }
 
 func (publisher *Publisher) startNotifyReturnHandler() {
