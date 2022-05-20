@@ -113,6 +113,7 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 	}
 
 	go publisher.startNotifyFlowHandler()
+	go publisher.startNotifyBlockedHandler()
 
 	go publisher.handleRestarts()
 
@@ -123,6 +124,7 @@ func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.chManager.notifyCancelOrClose {
 		publisher.options.Logger.InfoF("successful publisher recovery from: %v", err)
 		go publisher.startNotifyFlowHandler()
+		go publisher.startNotifyBlockedHandler()
 		if publisher.notifyReturnChan != nil {
 			go publisher.startNotifyReturnHandler()
 		}
