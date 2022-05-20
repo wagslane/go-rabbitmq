@@ -62,18 +62,18 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 	select {
 	case err := <-notifyCloseChan:
 		if err != nil {
-			chManager.logger.Printf("attempting to reconnect to amqp server after close with error: %v", err)
+			chManager.logger.ErrorF("attempting to reconnect to amqp server after close with error: %v", err)
 			chManager.reconnectLoop()
-			chManager.logger.Printf("successfully reconnected to amqp server")
+			chManager.logger.WarnF("successfully reconnected to amqp server")
 			chManager.notifyCancelOrClose <- err
 		}
 		if err == nil {
-			chManager.logger.Printf("amqp channel closed gracefully")
+			chManager.logger.InfoF("amqp channel closed gracefully")
 		}
 	case err := <-notifyCancelChan:
-		chManager.logger.Printf("attempting to reconnect to amqp server after cancel with error: %s", err)
+		chManager.logger.ErrorF("attempting to reconnect to amqp server after cancel with error: %s", err)
 		chManager.reconnectLoop()
-		chManager.logger.Printf("successfully reconnected to amqp server after cancel")
+		chManager.logger.WarnF("successfully reconnected to amqp server after cancel")
 		chManager.notifyCancelOrClose <- errors.New(err)
 	}
 }
@@ -81,11 +81,11 @@ func (chManager *channelManager) startNotifyCancelOrClosed() {
 // reconnectLoop continuously attempts to reconnect
 func (chManager *channelManager) reconnectLoop() {
 	for {
-		chManager.logger.Printf("waiting %s seconds to attempt to reconnect to amqp server", chManager.reconnectInterval)
+		chManager.logger.InfoF("waiting %s seconds to attempt to reconnect to amqp server", chManager.reconnectInterval)
 		time.Sleep(chManager.reconnectInterval)
 		err := chManager.reconnect()
 		if err != nil {
-			chManager.logger.Printf("error reconnecting to amqp server: %v", err)
+			chManager.logger.ErrorF("error reconnecting to amqp server: %v", err)
 		} else {
 			chManager.reconnectionCount++
 			go chManager.startNotifyCancelOrClosed()

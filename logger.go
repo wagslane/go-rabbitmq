@@ -8,14 +8,37 @@ import (
 // Logger is the interface to send logs to. It can be set using
 // WithPublisherOptionsLogger() or WithConsumerOptionsLogger().
 type Logger interface {
-	Printf(string, ...interface{})
+	FatalF(string, ...interface{})
+	ErrorF(string, ...interface{})
+	WarnF(string, ...interface{})
+	InfoF(string, ...interface{})
+	DebugF(string, ...interface{})
+	TraceF(string, ...interface{})
 }
 
 const loggingPrefix = "gorabbit"
 
-// stdLogger logs to stdout using go's default logger.
-type stdLogger struct{}
+// stdDebugLogger logs to stdout up to the `DebugF` level
+type stdDebugLogger struct{}
 
-func (l stdLogger) Printf(format string, v ...interface{}) {
+func (l stdDebugLogger) FatalF(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
 }
+
+func (l stdDebugLogger) ErrorF(format string, v ...interface{}) {
+	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
+}
+
+func (l stdDebugLogger) WarnF(format string, v ...interface{}) {
+	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
+}
+
+func (l stdDebugLogger) InfoF(format string, v ...interface{}) {
+	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
+}
+
+func (l stdDebugLogger) DebugF(format string, v ...interface{}) {
+	log.Printf(fmt.Sprintf("%s: %s", loggingPrefix, format), v...)
+}
+
+func (l stdDebugLogger) TraceF(format string, v ...interface{}) {}

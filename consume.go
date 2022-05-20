@@ -29,10 +29,8 @@ type Consumer struct {
 }
 
 // ConsumerOptions are used to describe a consumer's configuration.
-// Logging set to true will enable the consumer to print to stdout
-// Logger specifies a custom Logger interface implementation overruling Logging.
+// Logger specifies a custom Logger interface implementation.
 type ConsumerOptions struct {
-	Logging           bool
 	Logger            Logger
 	ReconnectInterval time.Duration
 }
@@ -47,8 +45,7 @@ type Delivery struct {
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
 func NewConsumer(url string, config Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
 	options := &ConsumerOptions{
-		Logging:           true,
-		Logger:            &stdLogger{},
+		Logger:            &stdDebugLogger{},
 		ReconnectInterval: time.Second * 5,
 	}
 	for _, optionFunc := range optionFuncs {
@@ -74,17 +71,15 @@ func WithConsumerOptionsReconnectInterval(reconnectInterval time.Duration) func(
 	}
 }
 
-// WithConsumerOptionsLogging sets a logger to log to stdout
+// WithConsumerOptionsLogging uses a default logger that writes to std out
 func WithConsumerOptionsLogging(options *ConsumerOptions) {
-	options.Logging = true
-	options.Logger = &stdLogger{}
+	options.Logger = &stdDebugLogger{}
 }
 
 // WithConsumerOptionsLogger sets logging to a custom interface.
 // Use WithConsumerOptionsLogging to just log to stdout.
 func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.Logging = true
 		options.Logger = log
 	}
 }
@@ -117,7 +112,7 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Printf("successful recovery from: %v", err)
+			consumer.logger.InfoF("successful recovery from: %v", err)
 			err = consumer.startGoroutines(
 				handler,
 				queue,
@@ -125,7 +120,7 @@ func (consumer Consumer) StartConsuming(
 				*options,
 			)
 			if err != nil {
-				consumer.logger.Printf("error restarting consumer goroutines after cancel or close: %v", err)
+				consumer.logger.ErrorF("error restarting consumer goroutines after cancel or close: %v", err)
 			}
 		}
 	}()
@@ -135,7 +130,7 @@ func (consumer Consumer) StartConsuming(
 // Close cleans up resources and closes the consumer.
 // The consumer is not safe for reuse
 func (consumer Consumer) Close() error {
-	consumer.chManager.logger.Printf("closing consumer...")
+	consumer.chManager.logger.InfoF("closing consumer...")
 	return consumer.chManager.close()
 }
 
@@ -223,7 +218,7 @@ func (consumer Consumer) startGoroutines(
 	for i := 0; i < consumeOptions.Concurrency; i++ {
 		go handlerGoroutine(consumer, msgs, consumeOptions, handler)
 	}
-	consumer.logger.Printf("Processing messages on %v goroutines", consumeOptions.Concurrency)
+	consumer.logger.InfoF("Processing messages on %v goroutines", consumeOptions.Concurrency)
 	return nil
 }
 
@@ -237,19 +232,19 @@ func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptio
 		case Ack:
 			err := msg.Ack(false)
 			if err != nil {
-				consumer.logger.Printf("can't ack message: %v", err)
+				consumer.logger.ErrorF("can't ack message: %v", err)
 			}
 		case NackDiscard:
 			err := msg.Nack(false, false)
 			if err != nil {
-				consumer.logger.Printf("can't nack message: %v", err)
+				consumer.logger.ErrorF("can't nack message: %v", err)
 			}
 		case NackRequeue:
 			err := msg.Nack(false, true)
 			if err != nil {
-				consumer.logger.Printf("can't nack message: %v", err)
+				consumer.logger.ErrorF("can't nack message: %v", err)
 			}
 		}
 	}
-	consumer.logger.Printf("rabbit consumer goroutine closed")
+	consumer.logger.InfoF("rabbit consumer goroutine closed")
 }

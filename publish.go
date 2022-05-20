@@ -54,9 +54,8 @@ type Publisher struct {
 }
 
 // PublisherOptions are used to describe a publisher's configuration.
-// Logging set to true will enable the consumer to print to stdout
+// Logger is a custom logging interface.
 type PublisherOptions struct {
-	Logging           bool
 	Logger            Logger
 	ReconnectInterval time.Duration
 }
@@ -70,16 +69,15 @@ func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
+// and sets the
 func WithPublisherOptionsLogging(options *PublisherOptions) {
-	options.Logging = true
-	options.Logger = &stdLogger{}
+	options.Logger = &stdDebugLogger{}
 }
 
 // WithPublisherOptionsLogger sets logging to a custom interface.
 // Use WithPublisherOptionsLogging to just log to stdout.
 func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 	return func(options *PublisherOptions) {
-		options.Logging = true
 		options.Logger = log
 	}
 }
@@ -91,8 +89,7 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
 	options := &PublisherOptions{
-		Logging:           true,
-		Logger:            &stdLogger{},
+		Logger:            &stdDebugLogger{},
 		ReconnectInterval: time.Second * 5,
 	}
 	for _, optionFunc := range optionFuncs {
@@ -124,7 +121,7 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 
 func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.chManager.notifyCancelOrClose {
-		publisher.options.Logger.Printf("successful publisher recovery from: %v", err)
+		publisher.options.Logger.InfoF("successful publisher recovery from: %v", err)
 		go publisher.startNotifyFlowHandler()
 		if publisher.notifyReturnChan != nil {
 			go publisher.startNotifyReturnHandler()
@@ -211,7 +208,7 @@ func (publisher *Publisher) Publish(
 // Close closes the publisher and releases resources
 // The publisher should be discarded as it's not safe for re-use
 func (publisher Publisher) Close() error {
-	publisher.chManager.logger.Printf("closing publisher...")
+	publisher.chManager.logger.InfoF("closing publisher...")
 	return publisher.chManager.close()
 }
 
