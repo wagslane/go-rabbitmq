@@ -13,11 +13,11 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 	for ok := range notifyFlowChan {
 		publisher.disablePublishDueToFlowMux.Lock()
 		if ok {
-			publisher.options.Logger.WarnF("pausing publishing due to flow request from server")
+			publisher.options.Logger.Warnf("pausing publishing due to flow request from server")
 			publisher.disablePublishDueToFlow = true
 		} else {
 			publisher.disablePublishDueToFlow = false
-			publisher.options.Logger.WarnF("resuming publishing due to flow request from server")
+			publisher.options.Logger.Warnf("resuming publishing due to flow request from server")
 		}
 		publisher.disablePublishDueToFlowMux.Unlock()
 	}
@@ -32,11 +32,11 @@ func (publisher *Publisher) startNotifyBlockedHandler() {
 	for b := range blockings {
 		publisher.disablePublishDueToBlockedMux.Lock()
 		if b.Active {
-			publisher.options.Logger.WarnF("pausing publishing due to TCP blocking from server")
+			publisher.options.Logger.Warnf("pausing publishing due to TCP blocking from server")
 			publisher.disablePublishDueToBlocked = true
 		} else {
 			publisher.disablePublishDueToBlocked = false
-			publisher.options.Logger.WarnF("resuming publishing due to TCP blocking from server")
+			publisher.options.Logger.Warnf("resuming publishing due to TCP blocking from server")
 		}
 		publisher.disablePublishDueToBlockedMux.Unlock()
 	}

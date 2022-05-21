@@ -122,7 +122,7 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 
 func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.chManager.notifyCancelOrClose {
-		publisher.options.Logger.InfoF("successful publisher recovery from: %v", err)
+		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
 		go publisher.startNotifyFlowHandler()
 		go publisher.startNotifyBlockedHandler()
 		if publisher.notifyReturnChan != nil {
@@ -210,7 +210,7 @@ func (publisher *Publisher) Publish(
 // Close closes the publisher and releases resources
 // The publisher should be discarded as it's not safe for re-use
 func (publisher Publisher) Close() error {
-	publisher.chManager.logger.InfoF("closing publisher...")
+	publisher.chManager.logger.Infof("closing publisher...")
 	return publisher.chManager.close()
 }
 

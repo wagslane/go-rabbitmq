@@ -9,21 +9,22 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     env:
-      GOFLAGS: -mod=vendor
-      GOPROXY: "off"
+      GOPROXY: "https://proxy.golang.org,direct"
 
     steps:
-      - name: Set up Go 1.16
+      - name: Set up Go 1.18
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16
+          go-version: 1.18
         id: go
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v1
 
+      - name: install staticcheck
+        run: |
+          cd /tmp && go install honnef.co/go/tools/cmd/staticcheck@latest
+
       - name: Make tests
         run: |
-          make install-lint
-          make install-staticcheck
           make

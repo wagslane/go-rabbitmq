@@ -112,7 +112,7 @@ func (consumer Consumer) StartConsuming(
 
 	go func() {
 		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.InfoF("successful recovery from: %v", err)
+			consumer.logger.Infof("successful recovery from: %v", err)
 			err = consumer.startGoroutines(
 				handler,
 				queue,
@@ -120,7 +120,7 @@ func (consumer Consumer) StartConsuming(
 				*options,
 			)
 			if err != nil {
-				consumer.logger.ErrorF("error restarting consumer goroutines after cancel or close: %v", err)
+				consumer.logger.Errorf("error restarting consumer goroutines after cancel or close: %v", err)
 			}
 		}
 	}()
@@ -130,7 +130,7 @@ func (consumer Consumer) StartConsuming(
 // Close cleans up resources and closes the consumer.
 // The consumer is not safe for reuse
 func (consumer Consumer) Close() error {
-	consumer.chManager.logger.InfoF("closing consumer...")
+	consumer.chManager.logger.Infof("closing consumer...")
 	return consumer.chManager.close()
 }
 
@@ -218,7 +218,7 @@ func (consumer Consumer) startGoroutines(
 	for i := 0; i < consumeOptions.Concurrency; i++ {
 		go handlerGoroutine(consumer, msgs, consumeOptions, handler)
 	}
-	consumer.logger.InfoF("Processing messages on %v goroutines", consumeOptions.Concurrency)
+	consumer.logger.Infof("Processing messages on %v goroutines", consumeOptions.Concurrency)
 	return nil
 }
 
@@ -232,19 +232,19 @@ func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptio
 		case Ack:
 			err := msg.Ack(false)
 			if err != nil {
-				consumer.logger.ErrorF("can't ack message: %v", err)
+				consumer.logger.Errorf("can't ack message: %v", err)
 			}
 		case NackDiscard:
 			err := msg.Nack(false, false)
 			if err != nil {
-				consumer.logger.ErrorF("can't nack message: %v", err)
+				consumer.logger.Errorf("can't nack message: %v", err)
 			}
 		case NackRequeue:
 			err := msg.Nack(false, true)
 			if err != nil {
-				consumer.logger.ErrorF("can't nack message: %v", err)
+				consumer.logger.Errorf("can't nack message: %v", err)
 			}
 		}
 	}
-	consumer.logger.InfoF("rabbit consumer goroutine closed")
+	consumer.logger.Infof("rabbit consumer goroutine closed")
 }

@@ -8,12 +8,12 @@ import (
 // Logger is the interface to send logs to. It can be set using
 // WithPublisherOptionsLogger() or WithConsumerOptionsLogger().
 type Logger interface {
-	FatalF(string, ...interface{})
-	ErrorF(string, ...interface{})
-	WarnF(string, ...interface{})
-	InfoF(string, ...interface{})
-	DebugF(string, ...interface{})
-	TraceF(string, ...interface{})
+	Fatalf(string, ...interface{})
+	Errorf(string, ...interface{})
+	Warnf(string, ...interface{})
+	Infof(string, ...interface{})
+	Debugf(string, ...interface{})
+	Tracef(string, ...interface{})
 }
 
 const loggingPrefix = "gorabbit"
@@ -21,24 +21,24 @@ const loggingPrefix = "gorabbit"
 // stdDebugLogger logs to stdout up to the `DebugF` level
 type stdDebugLogger struct{}
 
-func (l stdDebugLogger) FatalF(format string, v ...interface{}) {
+func (l stdDebugLogger) Fatalf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s FATAL: %s", loggingPrefix, format), v...)
 }
 
-func (l stdDebugLogger) ErrorF(format string, v ...interface{}) {
+func (l stdDebugLogger) Errorf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s ERROR: %s", loggingPrefix, format), v...)
 }
 
-func (l stdDebugLogger) WarnF(format string, v ...interface{}) {
+func (l stdDebugLogger) Warnf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s WARN: %s", loggingPrefix, format), v...)
 }
 
-func (l stdDebugLogger) InfoF(format string, v ...interface{}) {
+func (l stdDebugLogger) Infof(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s INFO: %s", loggingPrefix, format), v...)
 }
 
-func (l stdDebugLogger) DebugF(format string, v ...interface{}) {
+func (l stdDebugLogger) Debugf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s DEBUG: %s", loggingPrefix, format), v...)
 }
 
-func (l stdDebugLogger) TraceF(format string, v ...interface{}) {}
+func (l stdDebugLogger) Tracef(format string, v ...interface{}) {}

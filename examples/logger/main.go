@@ -10,24 +10,24 @@ import (
 // that only logs ERROR and FATAL log levels
 type errorLogger struct{}
 
-func (l errorLogger) FatalF(format string, v ...interface{}) {
+func (l errorLogger) Fatalf(format string, v ...interface{}) {
 	log.Printf("mylogger: "+format, v...)
 }
 
-func (l errorLogger) ErrorF(format string, v ...interface{}) {
+func (l errorLogger) Errorf(format string, v ...interface{}) {
 	log.Printf("mylogger: "+format, v...)
 }
 
-func (l errorLogger) WarnF(format string, v ...interface{}) {
+func (l errorLogger) Warnf(format string, v ...interface{}) {
 }
 
-func (l errorLogger) InfoF(format string, v ...interface{}) {
+func (l errorLogger) Infof(format string, v ...interface{}) {
 }
 
-func (l errorLogger) DebugF(format string, v ...interface{}) {
+func (l errorLogger) Debugf(format string, v ...interface{}) {
 }
 
-func (l errorLogger) TraceF(format string, v ...interface{}) {}
+func (l errorLogger) Tracef(format string, v ...interface{}) {}
 
 func main() {
 	mylogger := &errorLogger{}
