@@ -23,8 +23,9 @@ const (
 
 	defaultHeartbeat         = 10 * time.Second
 	defaultConnectionTimeout = 30 * time.Second
-	defaultProduct           = "https://github.com/streadway/amqp"
-	defaultVersion           = "β"
+	defaultProduct           = "Amqp 0.9.1 Client"
+	buildVersion             = "1.3.4"
+	platform                 = "golang"
 	// Safer default that makes channel leaks a lot easier to spot
 	// before they create operational headaches. See https://github.com/rabbitmq/rabbitmq-server/issues/1593.
 	defaultChannelMax = (2 << 10) - 1
@@ -282,6 +283,9 @@ accompanying a connection.close method or by a normal shutdown.
 
 The chan provided will be closed when the Channel is closed and on a
 graceful close, no error will be sent.
+
+In case of a non graceful close the error will be notified synchronously by the library
+so that it will be necessary to consume the Channel from the caller in order to avoid deadlocks
 
 To reconnect after a transport or protocol error, register a listener here and
 re-run your setup process.
@@ -757,8 +761,9 @@ func (c *Connection) openStart(config Config) error {
 func (c *Connection) openTune(config Config, auth Authentication) error {
 	if len(config.Properties) == 0 {
 		config.Properties = Table{
-			"product": defaultProduct,
-			"version": defaultVersion,
+			"product":  defaultProduct,
+			"version":  buildVersion,
+			"platform": platform,
 		}
 	}
 
