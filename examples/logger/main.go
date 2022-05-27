@@ -35,6 +35,7 @@ func main() {
 	publisher, err := rabbitmq.NewPublisher(
 		"amqp://guest:guest@localhost", rabbitmq.Config{},
 		rabbitmq.WithPublisherOptionsLogger(mylogger),
+		rabbitmq.WithPublisherOptionsExchangeName("events"),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +46,6 @@ func main() {
 		rabbitmq.WithPublishOptionsContentType("application/json"),
 		rabbitmq.WithPublishOptionsMandatory,
 		rabbitmq.WithPublishOptionsPersistentDelivery,
-		rabbitmq.WithPublishOptionsExchange("events"),
 	)
 	if err != nil {
 		log.Fatal(err)

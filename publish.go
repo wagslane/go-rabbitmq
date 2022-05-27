@@ -58,6 +58,54 @@ type Publisher struct {
 type PublisherOptions struct {
 	Logger            Logger
 	ReconnectInterval time.Duration
+	ExchangeOptions   *ExchangeOptions
+}
+
+// WithPublisherOptionsExchangeName returns a function that sets the exchange to publish to
+func WithPublisherOptionsExchangeName(name string) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		getPublisherExchangeOptionsOrSetDefault(options).Name = name
+	}
+}
+
+// WithPublisherOptionsExchangeKind returns a function that sets the binding exchange kind/type
+func WithPublisherOptionsExchangeKind(kind string) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		getPublisherExchangeOptionsOrSetDefault(options).Kind = kind
+	}
+}
+
+// WithPublisherOptionsExchangeDurable returns a function that sets the binding exchange durable flag
+func WithPublisherOptionsExchangeDurable(options *PublisherOptions) {
+	getPublisherExchangeOptionsOrSetDefault(options).Durable = true
+}
+
+// WithPublisherOptionsExchangeAutoDelete returns a function that sets the binding exchange autoDelete flag
+func WithPublisherOptionsExchangeAutoDelete(options *PublisherOptions) {
+	getPublisherExchangeOptionsOrSetDefault(options).AutoDelete = true
+}
+
+// WithPublisherOptionsExchangeInternal returns a function that sets the binding exchange internal flag
+func WithPublisherOptionsExchangeInternal(options *PublisherOptions) {
+	getPublisherExchangeOptionsOrSetDefault(options).Internal = true
+}
+
+// WithPublisherOptionsExchangeNoWait returns a function that sets the binding exchange noWait flag
+func WithPublisherOptionsExchangeNoWait(options *PublisherOptions) {
+	getPublisherExchangeOptionsOrSetDefault(options).NoWait = true
+}
+
+// WithPublisherOptionsExchangeArgs returns a function that sets the binding exchange arguments that are specific to the server's implementation of the exchange
+func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		getPublisherExchangeOptionsOrSetDefault(options).ExchangeArgs = args
+	}
+}
+
+// WithPublisherOptionsExchangeDeclare returns a function that declares the binding exchange.
+// Use this setting if you want the consumer to create the exchange on start.
+func WithPublisherOptionsExchangeDeclare(options *PublisherOptions) {
+	getPublisherExchangeOptionsOrSetDefault(options).Declare = true
 }
 
 // WithPublisherOptionsReconnectInterval sets the interval at which the publisher will
@@ -91,6 +139,7 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 	options := &PublisherOptions{
 		Logger:            &stdDebugLogger{},
 		ReconnectInterval: time.Second * 5,
+		ExchangeOptions:   getDefaultExchangeOptions(),
 	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -112,26 +161,16 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 		notifyPublishChan:             nil,
 	}
 
+	if err = declareOrVerifyExchange(publisher.options.ExchangeOptions, chManager.channel); err != nil {
+		return nil, err
+	}
+
 	go publisher.startNotifyFlowHandler()
 	go publisher.startNotifyBlockedHandler()
 
 	go publisher.handleRestarts()
 
 	return publisher, nil
-}
-
-func (publisher *Publisher) handleRestarts() {
-	for err := range publisher.chManager.notifyCancelOrClose {
-		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
-		go publisher.startNotifyFlowHandler()
-		go publisher.startNotifyBlockedHandler()
-		if publisher.notifyReturnChan != nil {
-			go publisher.startNotifyReturnHandler()
-		}
-		if publisher.notifyPublishChan != nil {
-			publisher.startNotifyPublishHandler()
-		}
-	}
 }
 
 // NotifyReturn registers a listener for basic.return methods.
@@ -194,7 +233,7 @@ func (publisher *Publisher) Publish(
 
 		// Actual publish.
 		err := publisher.chManager.channel.Publish(
-			options.Exchange,
+			publisher.options.ExchangeOptions.Name,
 			routingKey,
 			options.Mandatory,
 			options.Immediate,
@@ -212,6 +251,20 @@ func (publisher *Publisher) Publish(
 func (publisher Publisher) Close() error {
 	publisher.chManager.logger.Infof("closing publisher...")
 	return publisher.chManager.close()
+}
+
+func (publisher *Publisher) handleRestarts() {
+	for err := range publisher.chManager.notifyCancelOrClose {
+		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
+		go publisher.startNotifyFlowHandler()
+		go publisher.startNotifyBlockedHandler()
+		if publisher.notifyReturnChan != nil {
+			go publisher.startNotifyReturnHandler()
+		}
+		if publisher.notifyPublishChan != nil {
+			publisher.startNotifyPublishHandler()
+		}
+	}
 }
 
 func (publisher *Publisher) startNotifyReturnHandler() {

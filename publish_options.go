@@ -6,7 +6,6 @@ import (
 
 // PublishOptions are used to control how data is published
 type PublishOptions struct {
-	Exchange string
 	// Mandatory fails to publish if there are no queues
 	// bound to the routing key
 	Mandatory bool
@@ -41,13 +40,6 @@ type PublishOptions struct {
 	// Application or exchange specific fields,
 	// the headers exchange will inspect this field.
 	Headers Table
-}
-
-// WithPublishOptionsExchange returns a function that sets the exchange to publish to
-func WithPublishOptionsExchange(exchange string) func(*PublishOptions) {
-	return func(options *PublishOptions) {
-		options.Exchange = exchange
-	}
 }
 
 // WithPublishOptionsMandatory makes the publishing mandatory, which means when a queue is not

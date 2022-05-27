@@ -9,9 +9,9 @@ func getDefaultConsumeOptions() ConsumeOptions {
 		QueueNoWait:       false,
 		QueueDeclare:      true,
 		QueueArgs:         nil,
-		BindingExchange:   nil,
 		BindingNoWait:     false,
 		BindingArgs:       nil,
+		ExchangeOptions:   nil,
 		Concurrency:       1,
 		QOSPrefetch:       0,
 		QOSGlobal:         false,
@@ -32,9 +32,9 @@ type ConsumeOptions struct {
 	QueueNoWait       bool
 	QueueDeclare      bool
 	QueueArgs         Table
-	BindingExchange   *BindingExchangeOptions
 	BindingNoWait     bool
 	BindingArgs       Table
+	ExchangeOptions   *ExchangeOptions
 	Concurrency       int
 	QOSPrefetch       int
 	QOSGlobal         bool
@@ -44,36 +44,6 @@ type ConsumeOptions struct {
 	ConsumerNoWait    bool
 	ConsumerNoLocal   bool
 	ConsumerArgs      Table
-}
-
-// getBindingExchangeOptionsOrSetDefault returns pointer to current BindingExchange options. if no BindingExchange options are set yet, it will set it with default values.
-func getBindingExchangeOptionsOrSetDefault(options *ConsumeOptions) *BindingExchangeOptions {
-	if options.BindingExchange == nil {
-		options.BindingExchange = &BindingExchangeOptions{
-			Name:         "",
-			Kind:         "direct",
-			Durable:      false,
-			AutoDelete:   false,
-			Internal:     false,
-			NoWait:       false,
-			ExchangeArgs: nil,
-			Declare:      true,
-		}
-	}
-	return options.BindingExchange
-}
-
-// BindingExchangeOptions are used when binding to an exchange.
-// it will verify the exchange is created before binding to it.
-type BindingExchangeOptions struct {
-	Name         string
-	Kind         string
-	Durable      bool
-	AutoDelete   bool
-	Internal     bool
-	NoWait       bool
-	ExchangeArgs Table
-	Declare      bool
 }
 
 // WithConsumeOptionsQueueDurable sets the queue to durable, which means it won't
@@ -124,41 +94,41 @@ func WithConsumeOptionsQuorum(options *ConsumeOptions) {
 // WithConsumeOptionsBindingExchangeName returns a function that sets the exchange name the queue will be bound to
 func WithConsumeOptionsBindingExchangeName(name string) func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).Name = name
+		getConsumerExchangeOptionsOrSetDefault(options).Name = name
 	}
 }
 
 // WithConsumeOptionsBindingExchangeKind returns a function that sets the binding exchange kind/type
 func WithConsumeOptionsBindingExchangeKind(kind string) func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).Kind = kind
+		getConsumerExchangeOptionsOrSetDefault(options).Kind = kind
 	}
 }
 
 // WithConsumeOptionsBindingExchangeDurable returns a function that sets the binding exchange durable flag
 func WithConsumeOptionsBindingExchangeDurable(options *ConsumeOptions) {
-	getBindingExchangeOptionsOrSetDefault(options).Durable = true
+	getConsumerExchangeOptionsOrSetDefault(options).Durable = true
 }
 
 // WithConsumeOptionsBindingExchangeAutoDelete returns a function that sets the binding exchange autoDelete flag
 func WithConsumeOptionsBindingExchangeAutoDelete(options *ConsumeOptions) {
-	getBindingExchangeOptionsOrSetDefault(options).AutoDelete = true
+	getConsumerExchangeOptionsOrSetDefault(options).AutoDelete = true
 }
 
 // WithConsumeOptionsBindingExchangeInternal returns a function that sets the binding exchange internal flag
 func WithConsumeOptionsBindingExchangeInternal(options *ConsumeOptions) {
-	getBindingExchangeOptionsOrSetDefault(options).Internal = true
+	getConsumerExchangeOptionsOrSetDefault(options).Internal = true
 }
 
 // WithConsumeOptionsBindingExchangeNoWait returns a function that sets the binding exchange noWait flag
 func WithConsumeOptionsBindingExchangeNoWait(options *ConsumeOptions) {
-	getBindingExchangeOptionsOrSetDefault(options).NoWait = true
+	getConsumerExchangeOptionsOrSetDefault(options).NoWait = true
 }
 
 // WithConsumeOptionsBindingExchangeArgs returns a function that sets the binding exchange arguments that are specific to the server's implementation of the exchange
 func WithConsumeOptionsBindingExchangeArgs(args Table) func(*ConsumeOptions) {
 	return func(options *ConsumeOptions) {
-		getBindingExchangeOptionsOrSetDefault(options).ExchangeArgs = args
+		getConsumerExchangeOptionsOrSetDefault(options).ExchangeArgs = args
 	}
 }
 
@@ -166,7 +136,7 @@ func WithConsumeOptionsBindingExchangeArgs(args Table) func(*ConsumeOptions) {
 // binding exchange. Use this setting if the exchange already exists and you don't need to declare
 // it on consumer start.
 func WithConsumeOptionsBindingExchangeSkipDeclare(options *ConsumeOptions) {
-	getBindingExchangeOptionsOrSetDefault(options).Declare = false
+	getConsumerExchangeOptionsOrSetDefault(options).Declare = false
 }
 
 // WithConsumeOptionsBindingNoWait sets the bindings to nowait, which means if the queue can not be bound

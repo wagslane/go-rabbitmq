@@ -160,30 +160,21 @@ func (consumer Consumer) startGoroutines(
 		}
 	}
 
-	if consumeOptions.BindingExchange != nil {
-		exchange := consumeOptions.BindingExchange
-		if exchange.Name == "" {
-			return fmt.Errorf("binding to exchange but name not specified")
+	if consumeOptions.ExchangeOptions != nil {
+		exchangeOptions := consumeOptions.ExchangeOptions
+		if exchangeOptions.Name == "" {
+			return fmt.Errorf("binding to exchangeOptions but name not specified")
 		}
-		if exchange.Declare {
-			err := consumer.chManager.channel.ExchangeDeclare(
-				exchange.Name,
-				exchange.Kind,
-				exchange.Durable,
-				exchange.AutoDelete,
-				exchange.Internal,
-				exchange.NoWait,
-				tableToAMQPTable(exchange.ExchangeArgs),
-			)
-			if err != nil {
-				return err
-			}
+
+		if err := declareOrVerifyExchange(consumeOptions.ExchangeOptions, consumer.chManager.channel); err != nil {
+			return err
 		}
+
 		for _, routingKey := range routingKeys {
 			err := consumer.chManager.channel.QueueBind(
 				queue,
 				routingKey,
-				exchange.Name,
+				exchangeOptions.Name,
 				consumeOptions.BindingNoWait,
 				tableToAMQPTable(consumeOptions.BindingArgs),
 			)
