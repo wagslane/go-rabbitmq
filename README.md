@@ -48,7 +48,6 @@ err = consumer.StartConsuming(
         return rabbitmq.Ack
     },
     "my_queue",
-    []string{"routing_key1", "routing_key2"}
 )
 if err != nil {
     log.Fatal(err)
@@ -74,13 +73,7 @@ err = consumer.StartConsuming(
 			return rabbitmq.Ack
 		},
 		"my_queue",
-		[]string{"routing_key", "routing_key_2"},
 		rabbitmq.WithConsumeOptionsConcurrency(10),
-		rabbitmq.WithConsumeOptionsQueueDurable,
-		rabbitmq.WithConsumeOptionsQuorum,
-		rabbitmq.WithConsumeOptionsBindingExchangeName("events"),
-		rabbitmq.WithConsumeOptionsBindingExchangeKind("topic"),
-		rabbitmq.WithConsumeOptionsBindingExchangeDurable,
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
 	)
 if err != nil {
@@ -135,6 +128,59 @@ go func() {
         log.Printf("message returned from server: %s", string(r.Body))
     }
 }()
+```
+
+## 🚀 Quick Start Queue, Exchange and Binding Declaration
+
+### Consumer
+
+```go
+consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", rabbitmq.Config{})
+if err != nil {
+    log.Fatal(err)
+}
+defer consumer.Close()
+err = consumer.StartConsuming(
+		func(d rabbitmq.Delivery) rabbitmq.Action {
+			log.Printf("consumed: %v", string(d.Body))
+			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+			return rabbitmq.Ack
+		},
+		"my_queue",
+		rabbitmq.WithConsumeDeclareOptions(
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareQueueQuorum,
+			rabbitmq.WithDeclareExchangeName("events"),
+			rabbitmq.WithDeclareExchangeKind("topic"),
+			rabbitmq.WithDeclareExchangeDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}),
+		),
+	)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Publisher
+
+```go
+publisher, err := rabbitmq.NewPublisher(
+		"amqp://guest:guest@localhost", rabbitmq.Config{},
+		rabbitmq.WithPublisherOptionsLogging,
+		rabbitmq.WithPublisherDeclareOptions(
+			rabbitmq.WithDeclareQueueName("my_queue"),
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareQueueQuorum,
+			rabbitmq.WithDeclareExchangeName("events"),
+			rabbitmq.WithDeclareExchangeKind("topic"),
+			rabbitmq.WithDeclareExchangeDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}),
+		),
+	)
+if err != nil {
+    log.Fatal(err)
+}
+defer publisher.Close()
 ```
 
 ## Other usage examples

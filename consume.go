@@ -85,16 +85,15 @@ func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
 }
 
 // StartConsuming starts n goroutines where n="ConsumeOptions.QosOptions.Concurrency".
-// Each goroutine spawns a handler that consumes off of the qiven queue which binds to the routing key(s).
+// Each goroutine spawns a handler that consumes off of the given queue which binds to the routing key(s).
 // The provided handler is called once for each message. If the provided queue doesn't exist, it
 // will be created on the cluster
 func (consumer Consumer) StartConsuming(
 	handler Handler,
 	queue string,
-	routingKeys []string,
 	optionFuncs ...func(*ConsumeOptions),
 ) error {
-	defaultOptions := getDefaultConsumeOptions()
+	defaultOptions := getDefaultConsumeOptions(queue)
 	options := &defaultOptions
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
@@ -102,8 +101,6 @@ func (consumer Consumer) StartConsuming(
 
 	err := consumer.startGoroutines(
 		handler,
-		queue,
-		routingKeys,
 		*options,
 	)
 	if err != nil {
@@ -115,8 +112,6 @@ func (consumer Consumer) StartConsuming(
 			consumer.logger.Infof("successful recovery from: %v", err)
 			err = consumer.startGoroutines(
 				handler,
-				queue,
-				routingKeys,
 				*options,
 			)
 			if err != nil {
@@ -139,61 +134,17 @@ func (consumer Consumer) Close() error {
 // that will consume from the queue
 func (consumer Consumer) startGoroutines(
 	handler Handler,
-	queue string,
-	routingKeys []string,
 	consumeOptions ConsumeOptions,
 ) error {
+	err := handleDeclare(consumer.chManager, consumeOptions.DeclareOptions)
+	if err != nil {
+		return fmt.Errorf("declare failed: %w", err)
+	}
+
 	consumer.chManager.channelMux.RLock()
 	defer consumer.chManager.channelMux.RUnlock()
 
-	if consumeOptions.QueueDeclare {
-		_, err := consumer.chManager.channel.QueueDeclare(
-			queue,
-			consumeOptions.QueueDurable,
-			consumeOptions.QueueAutoDelete,
-			consumeOptions.QueueExclusive,
-			consumeOptions.QueueNoWait,
-			tableToAMQPTable(consumeOptions.QueueArgs),
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if consumeOptions.BindingExchange != nil {
-		exchange := consumeOptions.BindingExchange
-		if exchange.Name == "" {
-			return fmt.Errorf("binding to exchange but name not specified")
-		}
-		if exchange.Declare {
-			err := consumer.chManager.channel.ExchangeDeclare(
-				exchange.Name,
-				exchange.Kind,
-				exchange.Durable,
-				exchange.AutoDelete,
-				exchange.Internal,
-				exchange.NoWait,
-				tableToAMQPTable(exchange.ExchangeArgs),
-			)
-			if err != nil {
-				return err
-			}
-		}
-		for _, routingKey := range routingKeys {
-			err := consumer.chManager.channel.QueueBind(
-				queue,
-				routingKey,
-				exchange.Name,
-				consumeOptions.BindingNoWait,
-				tableToAMQPTable(consumeOptions.BindingArgs),
-			)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	err := consumer.chManager.channel.Qos(
+	err = consumer.chManager.channel.Qos(
 		consumeOptions.QOSPrefetch,
 		0,
 		consumeOptions.QOSGlobal,
@@ -203,7 +154,7 @@ func (consumer Consumer) startGoroutines(
 	}
 
 	msgs, err := consumer.chManager.channel.Consume(
-		queue,
+		consumeOptions.QueueName,
 		consumeOptions.ConsumerName,
 		consumeOptions.ConsumerAutoAck,
 		consumeOptions.ConsumerExclusive,

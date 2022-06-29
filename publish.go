@@ -56,8 +56,19 @@ type Publisher struct {
 // PublisherOptions are used to describe a publisher's configuration.
 // Logger is a custom logging interface.
 type PublisherOptions struct {
+	DeclareOptions
 	Logger            Logger
 	ReconnectInterval time.Duration
+}
+
+// WithPublisherDeclareOptions allows to set declare options that can be used to set up queue, exchange or bindings
+// before the publisher process starts.
+func WithPublisherDeclareOptions(declareOptionsFuncs ...func(options *DeclareOptions)) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		for _, declareOption := range declareOptionsFuncs {
+			declareOption(&options.DeclareOptions)
+		}
+	}
 }
 
 // WithPublisherOptionsReconnectInterval sets the interval at which the publisher will
@@ -110,6 +121,11 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 		options:                       *options,
 		notifyReturnChan:              nil,
 		notifyPublishChan:             nil,
+	}
+
+	err = handleDeclare(chManager, options.DeclareOptions)
+	if err != nil {
+		return nil, fmt.Errorf("declare failed: %w", err)
 	}
 
 	go publisher.startNotifyFlowHandler()
