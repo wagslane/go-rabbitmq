@@ -137,6 +137,31 @@ go func() {
 }()
 ```
 
+## 🚀 Quick Start Queue, Exchange and Binding Declaration
+
+### Publisher
+
+```go
+publisher, err := rabbitmq.NewPublisher(
+		"amqp://guest:guest@localhost", rabbitmq.Config{},
+		rabbitmq.WithPublisherOptionsLogging,
+		rabbitmq.WithPublisherDeclareOptions(
+			rabbitmq.WithDeclareQueueName("my_queue"),
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareQueueQuorum,
+			rabbitmq.WithDeclareExchangeName("events"),
+			rabbitmq.WithDeclareExchangeKind("topic"),
+			rabbitmq.WithDeclareExchangeDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}),
+		),
+	)
+if err != nil {
+    log.Fatal(err)
+}
+defer publisher.Close()
+```
+
+
 ## Other usage examples
 
 See the [examples](examples) directory for more ideas.
