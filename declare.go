@@ -354,7 +354,7 @@ func WithDeclareExchangeNoDeclare(options *DeclareOptions) {
 // WithDeclareBindingNoWait sets the bindings to nowait, which means if the queue can not be bound
 // the channel will not be closed with an error.
 // This function must be called after bindings have been defined, otherwise it has no effect.
-func WithDeclareBindingNoWait(options *ConsumeOptions) {
+func WithDeclareBindingNoWait(options *DeclareOptions) {
 	for i := range options.Bindings {
 		options.Bindings[i].NoWait = true
 	}

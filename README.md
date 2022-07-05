@@ -10,7 +10,7 @@ Supported by [Boot.dev](https://boot.dev)
 
 [Streadway's AMQP](https://github.com/rabbitmq/amqp091-go) library is currently the most robust and well-supported Go client I'm aware of. It's a fantastic option and I recommend starting there and seeing if it fulfills your needs. Their project has made an effort to stay within the scope of the AMQP protocol, as such, no reconnection logic and few ease-of-use abstractions are provided.
 
-### Goal 
+### Goal
 
 The goal with `go-rabbitmq` is to still provide most all of the nitty-gritty functionality of AMQP, but to make it easier to work with via a higher-level API. Particularly:
 
@@ -48,7 +48,6 @@ err = consumer.StartConsuming(
         return rabbitmq.Ack
     },
     "my_queue",
-    []string{"routing_key1", "routing_key2"}
 )
 if err != nil {
     log.Fatal(err)
@@ -74,13 +73,7 @@ err = consumer.StartConsuming(
 			return rabbitmq.Ack
 		},
 		"my_queue",
-		[]string{"routing_key", "routing_key_2"},
 		rabbitmq.WithConsumeOptionsConcurrency(10),
-		rabbitmq.WithConsumeOptionsQueueDurable,
-		rabbitmq.WithConsumeOptionsQuorum,
-		rabbitmq.WithConsumeOptionsBindingExchangeName("events"),
-		rabbitmq.WithConsumeOptionsBindingExchangeKind("topic"),
-		rabbitmq.WithConsumeOptionsBindingExchangeDurable,
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
 	)
 if err != nil {
@@ -135,6 +128,37 @@ go func() {
         log.Printf("message returned from server: %s", string(r.Body))
     }
 }()
+```
+
+## 🚀 Quick Start Queue, Exchange and Binding Declaration
+
+### Consumer
+
+```go
+consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", rabbitmq.Config{})
+if err != nil {
+    log.Fatal(err)
+}
+defer consumer.Close()
+err = consumer.StartConsuming(
+		func(d rabbitmq.Delivery) rabbitmq.Action {
+			log.Printf("consumed: %v", string(d.Body))
+			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+			return rabbitmq.Ack
+		},
+		"my_queue",
+		rabbitmq.WithConsumeDeclareOptions(
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareQueueQuorum,
+			rabbitmq.WithDeclareExchangeName("events"),
+			rabbitmq.WithDeclareExchangeKind("topic"),
+			rabbitmq.WithDeclareExchangeDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}),
+		),
+	)
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 ## Other usage examples
