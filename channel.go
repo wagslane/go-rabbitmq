@@ -103,13 +103,12 @@ func (chManager *channelManager) reconnect() error {
 		return err
 	}
 
-	err = chManager.channel.Close()
-	if err != nil {
-		return err
+	if err = chManager.channel.Close(); err != nil {
+		chManager.logger.Warnf("error closing channel while reconnecting: %v", err)
 	}
-	err = chManager.connection.Close()
-	if err != nil {
-		return err
+
+	if err = chManager.connection.Close(); err != nil {
+		chManager.logger.Warnf("error closing connection while reconnecting: %v", err)
 	}
 
 	chManager.connection = newConn
