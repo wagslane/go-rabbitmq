@@ -29,7 +29,7 @@ type Return struct {
 	amqp.Return
 }
 
-// Confirmation notifies the acknowledgment or negative acknowledgement of a publishing identified by its delivery tag.
+// Confirmation notifies the acknowledgment or negative acknowledgment of a publishing identified by its delivery tag.
 // Use NotifyPublish to consume these events. ReconnectionCount is useful in that each time it increments, the DeliveryTag
 // is reset to 0, meaning you can use ReconnectionCount+DeliveryTag to ensure uniqueness
 type Confirmation struct {
@@ -103,7 +103,7 @@ func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 }
 
 // WithPublisherOptionsExchangeDeclare returns a function that declares the binding exchange.
-// Use this setting if you want the consumer to create the exchange on start.
+// Use this setting if you want the publisher to create the exchange on start.
 func WithPublisherOptionsExchangeDeclare(options *PublisherOptions) {
 	getPublisherExchangeOptionsOrSetDefault(options).Declare = true
 }
@@ -116,7 +116,7 @@ func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func
 	}
 }
 
-// WithPublisherOptionsLogging sets logging to true on the consumer options
+// WithPublisherOptionsLogging sets logging to true on the publisher options
 // and sets the
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logger = &stdDebugLogger{}
