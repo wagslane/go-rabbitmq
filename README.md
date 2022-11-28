@@ -12,7 +12,7 @@ Supported by [Boot.dev](https://boot.dev)
 
 ### Goal 
 
-The goal with `go-rabbitmq` is to provide *most* (but not all) of the nitty-gritty functionality of AMQP, but to make it easier to work with via a higher-level API. Particularly:
+The goal with `go-rabbitmq` is to provide *most* (but not all) of the nitty-gritty functionality of Streadway's AMQP, but to make it easier to work with via a higher-level API. `go-rabbitmq` is also built specifically for Rabbit, not for the AMQP protocol. In particular we want:
 
 * Automatic reconnection
 * Multithreaded consumers via a handler function
