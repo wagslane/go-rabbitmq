@@ -10,7 +10,7 @@ import (
 	rabbitmq "github.com/wagslane/go-rabbitmq"
 )
 
-var consumerName = "example"
+var consumerName = "example_with_declare"
 
 func main() {
 	consumer, err := rabbitmq.NewConsumer(
@@ -34,7 +34,21 @@ func main() {
 			return rabbitmq.Ack
 		},
 		"my_queue",
-		rabbitmq.WithConsumeOptionsConcurrency(10),
+		rabbitmq.WithConsumeDeclareOptions(
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareQueueQuorum,
+			rabbitmq.WithDeclareExchangeName("events"),
+			rabbitmq.WithDeclareExchangeKind("topic"),
+			rabbitmq.WithDeclareExchangeDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}), // implicit bindings
+			rabbitmq.WithDeclareBindings([]rabbitmq.Binding{ // custom bindings
+				{
+					QueueName:    "my_queue",
+					ExchangeName: "events",
+					RoutingKey:   "a_custom_key",
+				},
+			}),
+		),
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
 	)
 	if err != nil {
