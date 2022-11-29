@@ -12,7 +12,7 @@ Supported by [Boot.dev](https://boot.dev)
 
 ### Goal
 
-The goal with `go-rabbitmq` is to provide *most* (but not all) of the nitty-gritty functionality of Streadway's AMQP, but to make it easier to work with via a higher-level API. `go-rabbitmq` is also built specifically for Rabbit, not for the AMQP protocol. In particular we want:
+The goal with `go-rabbitmq` is to provide *most* (but not all) of the nitty-gritty functionality of Streadway's AMQP, but to make it easier to work with via a higher-level API. `go-rabbitmq` is also built specifically for Rabbit, not for the AMQP protocol. In particular, we want:
 
 * Automatic reconnection
 * Multithreaded consumers via a handler function
@@ -30,31 +30,7 @@ go get github.com/wagslane/go-rabbitmq
 
 ## 🚀 Quick Start Consumer
 
-### Default options
-
-```go
-consumer, err := rabbitmq.NewConsumer(
-    "amqp://guest:guest@localhost", rabbitmq.Config{},
-    rabbitmq.WithConsumerOptionsLogging,
-)
-if err != nil {
-    log.Fatal(err)
-}
-defer consumer.Close()
-err = consumer.StartConsuming(
-    func(d rabbitmq.Delivery) rabbitmq.Action {
-        log.Printf("consumed: %v", string(d.Body))
-        // rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
-        return rabbitmq.Ack
-    },
-    "my_queue",
-)
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-### With options
+Take note of the optional `options` parameters after the queue name. While not *necessary*, you'll *probably* want to at least declare the queue itself and some routing key bindings.
 
 ```go
 consumer, err := rabbitmq.NewConsumer(
@@ -73,8 +49,17 @@ err = consumer.StartConsuming(
 			return rabbitmq.Ack
 		},
 		"my_queue",
+		// spawns 10 goroutines to handle incoming messages
 		rabbitmq.WithConsumeOptionsConcurrency(10),
+		// assigns a name to this consumer on the cluster
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
+		rabbitmq.WithConsumeDeclareOptions(
+			// creates a durable queue named "my_queue"
+			// if it doesn't exist yet
+			rabbitmq.WithDeclareQueueDurable,
+			// binds the queue to "my_routing_key" if it isn't already
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"my_routing_key"}),
+		),
 	)
 if err != nil {
     log.Fatal(err)
@@ -83,21 +68,7 @@ if err != nil {
 
 ## 🚀 Quick Start Publisher
 
-### Default options
-
-```go
-publisher, err := rabbitmq.NewPublisher("amqp://user:pass@localhost", rabbitmq.Config{})
-if err != nil {
-    log.Fatal(err)
-}
-defer publisher.Close()
-err = publisher.Publish([]byte("hello, world"), []string{"routing_key"})
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-### With options
+Again, notice that all of the options functions aren't required, use them as you need them.
 
 ```go
 publisher, err := rabbitmq.NewPublisher(
@@ -113,9 +84,10 @@ if err != nil {
 err = publisher.Publish(
 	[]byte("hello, world"),
 	[]string{"routing_key"},
+	// optionally set the content type of the published messages
 	rabbitmq.WithPublishOptionsContentType("application/json"),
-	rabbitmq.WithPublishOptionsMandatory,
-	rabbitmq.WithPublishOptionsPersistentDelivery,
+	// optionally auto-declare and bind
+	// to this exchange if it doens't exist yet
 	rabbitmq.WithPublishOptionsExchange("events"),
 )
 if err != nil {
@@ -128,37 +100,6 @@ go func() {
         log.Printf("message returned from server: %s", string(r.Body))
     }
 }()
-```
-
-## 🚀 Quick Start Queue, Exchange and Binding Declaration
-
-### Consumer
-
-```go
-consumer, err := rabbitmq.NewConsumer("amqp://user:pass@localhost", rabbitmq.Config{})
-if err != nil {
-    log.Fatal(err)
-}
-defer consumer.Close()
-err = consumer.StartConsuming(
-		func(d rabbitmq.Delivery) rabbitmq.Action {
-			log.Printf("consumed: %v", string(d.Body))
-			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
-			return rabbitmq.Ack
-		},
-		"my_queue",
-		rabbitmq.WithConsumeDeclareOptions(
-			rabbitmq.WithDeclareQueueDurable,
-			rabbitmq.WithDeclareQueueQuorum,
-			rabbitmq.WithDeclareExchangeName("events"),
-			rabbitmq.WithDeclareExchangeKind("topic"),
-			rabbitmq.WithDeclareExchangeDurable,
-			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"routing_key", "routing_key_2"}),
-		),
-	)
-if err != nil {
-    log.Fatal(err)
-}
 ```
 
 ## Other usage examples
@@ -181,6 +122,6 @@ My goal is to keep dependencies limited to 1, [github.com/rabbitmq/amqp091-go](h
 
 ## 👏 Contributing
 
-I love help! Contribute by forking the repo and opening pull requests. Please ensure that your code passes the existing tests and linting, and write tests to test your changes if applicable.
+I would love your help! Contribute by forking the repo and opening pull requests. Please ensure that your code passes the existing tests and linting, and write tests to test your changes if applicable.
 
 All pull requests should be submitted to the `main` branch.

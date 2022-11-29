@@ -37,9 +37,9 @@ func WithConsumeDeclareOptions(declareOptionsFuncs ...func(options *DeclareOptio
 	return func(options *ConsumeOptions) {
 		for _, declareOption := range declareOptionsFuncs {
 			// If a queue was set to declare, ensure that the queue name is set.
-			if options.DeclareOptions.Queue != nil {
-				if options.DeclareOptions.Queue.Name == "" {
-					options.DeclareOptions.Queue.Name = options.QueueName
+			if options.Queue != nil {
+				if options.Queue.Name == "" {
+					options.Queue.Name = options.QueueName
 				}
 			}
 

@@ -36,6 +36,11 @@ func main() {
 		"my_queue",
 		rabbitmq.WithConsumeOptionsConcurrency(10),
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
+		rabbitmq.WithConsumeDeclareOptions(
+			// creates a the queue if it doesn't exist yet
+			rabbitmq.WithDeclareQueueDurable,
+			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"my_routing_key"}),
+		),
 	)
 	if err != nil {
 		log.Fatal(err)
