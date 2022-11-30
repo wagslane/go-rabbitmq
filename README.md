@@ -33,37 +33,31 @@ go get github.com/wagslane/go-rabbitmq
 Take note of the optional `options` parameters after the queue name. While not *necessary*, you'll *probably* want to at least declare the queue itself and some routing key bindings.
 
 ```go
-consumer, err := rabbitmq.NewConsumer(
-    "amqp://user:pass@localhost",
-    rabbitmq.Config{},
-    rabbitmq.WithConsumerOptionsLogging,
+conn, err := rabbitmq.NewConn(
+	"amqp://guest:guest@localhost",
+	rabbitmq.WithConnectionOptionsLogging,
 )
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
+}
+defer conn.Close()
+
+consumer, err := rabbitmq.NewConsumer(
+	conn,
+	func(d rabbitmq.Delivery) rabbitmq.Action {
+		log.Printf("consumed: %v", string(d.Body))
+		// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+		return rabbitmq.Ack
+	},
+	"my_queue",
+	rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key"),
+	rabbitmq.WithConsumerOptionsExchangeName("events"),
+	rabbitmq.WithConsumerOptionsExchangeDeclare,
+)
+if err != nil {
+	log.Fatal(err)
 }
 defer consumer.Close()
-err = consumer.StartConsuming(
-		func(d rabbitmq.Delivery) rabbitmq.Action {
-			log.Printf("consumed: %v", string(d.Body))
-			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
-			return rabbitmq.Ack
-		},
-		"my_queue",
-		// spawns 10 goroutines to handle incoming messages
-		rabbitmq.WithConsumerOptionsConcurrency(10),
-		// assigns a name to this consumer on the cluster
-		rabbitmq.WithConsumerOptionsConsumerName(consumerName),
-		rabbitmq.WithConsumeDeclareOptions(
-			// creates a durable queue named "my_queue"
-			// if it doesn't exist yet
-			rabbitmq.WithDeclareQueueDurable,
-			// binds the queue to "my_routing_key" if it isn't already
-			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"my_routing_key"}),
-		),
-	)
-if err != nil {
-    log.Fatal(err)
-}
 ```
 
 ## 🚀 Quick Start Publisher
@@ -71,44 +65,56 @@ if err != nil {
 Again, notice that all of the options functions aren't required, use them as you need them.
 
 ```go
-publisher, err := rabbitmq.NewPublisher(
-    "amqp://user:pass@localhost",
-    rabbitmq.Config{},
-    // can pass nothing for no logging
-    rabbitmq.WithPublisherOptionsLogging,
+conn, err := rabbitmq.NewConn(
+	"amqp://guest:guest@localhost",
+	rabbitmq.WithConnectionOptionsLogging,
 )
-defer publisher.Close()
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
+defer conn.Close()
+
+publisher, err := rabbitmq.NewPublisher(
+	conn,
+	rabbitmq.WithPublisherOptionsLogging,
+	rabbitmq.WithPublisherOptionsExchangeName("events"),
+	rabbitmq.WithPublisherOptionsExchangeDeclare,
+)
+if err != nil {
+	log.Fatal(err)
+}
+defer publisher.Close()
+
 err = publisher.Publish(
 	[]byte("hello, world"),
-	[]string{"routing_key"},
-	// optionally set the content type of the published messages
+	[]string{"my_routing_key"},
 	rabbitmq.WithPublishOptionsContentType("application/json"),
-	// optionally auto-declare and bind
-	// to this exchange if it doens't exist yet
 	rabbitmq.WithPublishOptionsExchange("events"),
 )
 if err != nil {
-    log.Fatal(err)
+	log.Println(err)
 }
-
-returns := publisher.NotifyReturn()
-go func() {
-    for r := range returns {
-        log.Printf("message returned from server: %s", string(r.Body))
-    }
-}()
 ```
 
 ## Other usage examples
 
 See the [examples](examples) directory for more ideas.
 
+## Options and configuring
+
+* By default, queues are created if they didn't already exist by new consumers
+* By default, routing-key bindings are created by consumers if they didn't exist if you're using `WithConsumerOptionsRoutingKey`
+* By default, exchanges are *not* created by publishers or consumers if they didn't already exist, hence `WithPublisherOptionsExchangeDeclare` and `WithConsumerOptionsExchangeDeclare`.
+
+Read up on all the options in the GoDoc, there are quite a few of them. I try to pick sane and simple defaults.
+
+## Closing and resources
+
+Close your publishers and consumers when you're done with them and don't attempt to reuse them. Only close the connection itself once you've closed all associated publishers and consumers.
+
 ## Stability
 
-Note that the API is currently in `v0`. I don't plan on any huge changes, but there may be some small breaking changes before we hit `v1`.
+Note that the API is currently in `v0`. I don't plan on huge changes, but there may be some small breaking changes before we hit `v1`.
 
 ## 💬 Contact
 
