@@ -12,28 +12,39 @@ import (
 )
 
 func main() {
+	conn, err := rabbitmq.NewConn(
+		"amqp://guest:guest@localhost",
+		rabbitmq.WithConnectionOptionsLogging,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 	publisher, err := rabbitmq.NewPublisher(
-		"amqp://guest:guest@localhost", rabbitmq.Config{},
+		conn,
 		rabbitmq.WithPublisherOptionsLogging,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		err := publisher.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	defer publisher.Close()
 
-	returns := publisher.NotifyReturn()
+	publisher2, err := rabbitmq.NewPublisher(
+		conn,
+		rabbitmq.WithPublisherOptionsLogging,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer publisher2.Close()
+
+	returns := conn.NotifyReturn()
 	go func() {
 		for r := range returns {
 			log.Printf("message returned from server: %s", string(r.Body))
 		}
 	}()
 
-	confirmations := publisher.NotifyPublish()
+	confirmations := conn.NotifyPublish()
 	go func() {
 		for c := range confirmations {
 			log.Printf("message confirmed from server. tag: %v, ack: %v", c.DeliveryTag, c.Ack)
@@ -61,7 +72,18 @@ func main() {
 		case <-ticker.C:
 			err = publisher.Publish(
 				[]byte("hello, world"),
-				[]string{"routing_key"},
+				[]string{"my_routing_key"},
+				rabbitmq.WithPublishOptionsContentType("application/json"),
+				rabbitmq.WithPublishOptionsMandatory,
+				rabbitmq.WithPublishOptionsPersistentDelivery,
+				rabbitmq.WithPublishOptionsExchange("events"),
+			)
+			if err != nil {
+				log.Println(err)
+			}
+			err = publisher2.Publish(
+				[]byte("hello, world 2"),
+				[]string{"my_routing_key"},
 				rabbitmq.WithPublishOptionsContentType("application/json"),
 				rabbitmq.WithPublishOptionsMandatory,
 				rabbitmq.WithPublishOptionsPersistentDelivery,

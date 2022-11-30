@@ -5,7 +5,7 @@ import (
 )
 
 func (publisher *Publisher) startNotifyFlowHandler() {
-	notifyFlowChan := publisher.chManager.channel.NotifyFlow(make(chan bool))
+	notifyFlowChan := publisher.connManager.NotifyFlowSafe(make(chan bool))
 	publisher.disablePublishDueToFlowMux.Lock()
 	publisher.disablePublishDueToFlow = false
 	publisher.disablePublishDueToFlowMux.Unlock()
@@ -24,7 +24,7 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 }
 
 func (publisher *Publisher) startNotifyBlockedHandler() {
-	blockings := publisher.chManager.connection.NotifyBlocked(make(chan amqp.Blocking))
+	blockings := publisher.connManager.NotifyBlockedSafe(make(chan amqp.Blocking))
 	publisher.disablePublishDueToBlockedMux.Lock()
 	publisher.disablePublishDueToBlocked = false
 	publisher.disablePublishDueToBlockedMux.Unlock()

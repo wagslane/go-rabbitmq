@@ -32,8 +32,16 @@ func (l errorLogger) Tracef(format string, v ...interface{}) {}
 func main() {
 	mylogger := &errorLogger{}
 
+	conn, err := rabbitmq.NewConn(
+		"amqp://guest:guest@localhost",
+		rabbitmq.WithConnectionOptionsLogging,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	publisher, err := rabbitmq.NewPublisher(
-		"amqp://guest:guest@localhost", rabbitmq.Config{},
+		conn,
 		rabbitmq.WithPublisherOptionsLogger(mylogger),
 	)
 	if err != nil {
@@ -41,7 +49,7 @@ func main() {
 	}
 	err = publisher.Publish(
 		[]byte("hello, world"),
-		[]string{"routing_key"},
+		[]string{"my_routing_key"},
 		rabbitmq.WithPublishOptionsContentType("application/json"),
 		rabbitmq.WithPublishOptionsMandatory,
 		rabbitmq.WithPublishOptionsPersistentDelivery,
@@ -51,7 +59,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	returns := publisher.NotifyReturn()
+	returns := conn.NotifyReturn()
 	go func() {
 		for r := range returns {
 			log.Printf("message returned from server: %s", string(r.Body))

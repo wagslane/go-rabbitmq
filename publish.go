@@ -1,11 +1,12 @@
 package rabbitmq
 
 import (
+	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
 )
 
 // DeliveryMode. Transient means higher throughput but messages will not be
@@ -39,10 +40,9 @@ type Confirmation struct {
 
 // Publisher allows you to publish messages safely across an open connection
 type Publisher struct {
-	chManager *channelManager
-
-	notifyReturnChan  chan Return
-	notifyPublishChan chan Confirmation
+	connManager                *connectionmanager.ConnectionManager
+	reconnectErrCh             <-chan error
+	closeConnectionToManagerCh chan<- struct{}
 
 	disablePublishDueToFlow    bool
 	disablePublishDueToFlowMux *sync.RWMutex
@@ -56,16 +56,7 @@ type Publisher struct {
 // PublisherOptions are used to describe a publisher's configuration.
 // Logger is a custom logging interface.
 type PublisherOptions struct {
-	Logger            Logger
-	ReconnectInterval time.Duration
-}
-
-// WithPublisherOptionsReconnectInterval sets the interval at which the publisher will
-// attempt to reconnect to the rabbit server
-func WithPublisherOptionsReconnectInterval(reconnectInterval time.Duration) func(options *PublisherOptions) {
-	return func(options *PublisherOptions) {
-		options.ReconnectInterval = reconnectInterval
-	}
+	Logger Logger
 }
 
 // WithPublisherOptionsLogging sets logging to true on the consumer options
@@ -87,29 +78,27 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
-func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
+func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
 	options := &PublisherOptions{
-		Logger:            &stdDebugLogger{},
-		ReconnectInterval: time.Second * 5,
+		Logger: &stdDebugLogger{},
 	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
 
-	chManager, err := newChannelManager(url, config, options.Logger, options.ReconnectInterval)
-	if err != nil {
-		return nil, err
+	if conn.connectionManager == nil {
+		return nil, errors.New("connection manager can't be nil")
 	}
-
+	reconnectErrCh, closeCh := conn.connectionManager.NotifyReconnect()
 	publisher := &Publisher{
-		chManager:                     chManager,
+		connManager:                   conn.connectionManager,
+		reconnectErrCh:                reconnectErrCh,
+		closeConnectionToManagerCh:    closeCh,
 		disablePublishDueToFlow:       false,
 		disablePublishDueToFlowMux:    &sync.RWMutex{},
 		disablePublishDueToBlocked:    false,
 		disablePublishDueToBlockedMux: &sync.RWMutex{},
 		options:                       *options,
-		notifyReturnChan:              nil,
-		notifyPublishChan:             nil,
 	}
 
 	go publisher.startNotifyFlowHandler()
@@ -121,32 +110,11 @@ func NewPublisher(url string, config Config, optionFuncs ...func(*PublisherOptio
 }
 
 func (publisher *Publisher) handleRestarts() {
-	for err := range publisher.chManager.notifyCancelOrClose {
+	for err := range publisher.reconnectErrCh {
 		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
 		go publisher.startNotifyFlowHandler()
 		go publisher.startNotifyBlockedHandler()
-		if publisher.notifyReturnChan != nil {
-			go publisher.startNotifyReturnHandler()
-		}
-		if publisher.notifyPublishChan != nil {
-			publisher.startNotifyPublishHandler()
-		}
 	}
-}
-
-// NotifyReturn registers a listener for basic.return methods.
-// These can be sent from the server when a publish is undeliverable either from the mandatory or immediate flags.
-func (publisher *Publisher) NotifyReturn() <-chan Return {
-	publisher.notifyReturnChan = make(chan Return)
-	go publisher.startNotifyReturnHandler()
-	return publisher.notifyReturnChan
-}
-
-// NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
-func (publisher *Publisher) NotifyPublish() <-chan Confirmation {
-	publisher.notifyPublishChan = make(chan Confirmation)
-	publisher.startNotifyPublishHandler()
-	return publisher.notifyPublishChan
 }
 
 // Publish publishes the provided data to the given routing keys over the connection
@@ -193,7 +161,7 @@ func (publisher *Publisher) Publish(
 		message.AppId = options.AppID
 
 		// Actual publish.
-		err := publisher.chManager.channel.Publish(
+		err := publisher.connManager.PublishSafe(
 			options.Exchange,
 			routingKey,
 			options.Mandatory,
@@ -209,27 +177,7 @@ func (publisher *Publisher) Publish(
 
 // Close closes the publisher and releases resources
 // The publisher should be discarded as it's not safe for re-use
-func (publisher Publisher) Close() error {
-	publisher.chManager.logger.Infof("closing publisher...")
-	return publisher.chManager.close()
-}
-
-func (publisher *Publisher) startNotifyReturnHandler() {
-	returnAMQPCh := publisher.chManager.channel.NotifyReturn(make(chan amqp.Return, 1))
-	for ret := range returnAMQPCh {
-		publisher.notifyReturnChan <- Return{ret}
-	}
-}
-
-func (publisher *Publisher) startNotifyPublishHandler() {
-	publisher.chManager.channel.Confirm(false)
-	go func() {
-		publishAMQPCh := publisher.chManager.channel.NotifyPublish(make(chan amqp.Confirmation, 1))
-		for conf := range publishAMQPCh {
-			publisher.notifyPublishChan <- Confirmation{
-				Confirmation:      conf,
-				ReconnectionCount: int(publisher.chManager.reconnectionCount),
-			}
-		}
-	}()
+func (publisher *Publisher) Close() {
+	publisher.options.Logger.Infof("closing publisher...")
+	publisher.closeConnectionToManagerCh <- struct{}{}
 }

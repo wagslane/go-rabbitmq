@@ -1,10 +1,12 @@
 package rabbitmq
 
 import (
+	"errors"
 	"fmt"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
 
 // Action is an action that occurs after processed this delivery
@@ -24,15 +26,16 @@ const (
 
 // Consumer allows you to create and connect to queues for data consumption.
 type Consumer struct {
-	chManager *channelManager
-	logger    Logger
+	connManager                *connectionmanager.ConnectionManager
+	reconnectErrCh             <-chan error
+	closeConnectionToManagerCh chan<- struct{}
+	options                    ConsumerOptions
 }
 
 // ConsumerOptions are used to describe a consumer's configuration.
 // Logger specifies a custom Logger interface implementation.
 type ConsumerOptions struct {
-	Logger            Logger
-	ReconnectInterval time.Duration
+	Logger logger.Logger
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -43,32 +46,27 @@ type Delivery struct {
 }
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
-func NewConsumer(url string, config Config, optionFuncs ...func(*ConsumerOptions)) (Consumer, error) {
+func NewConsumer(conn *Conn, optionFuncs ...func(*ConsumerOptions)) (*Consumer, error) {
 	options := &ConsumerOptions{
-		Logger:            &stdDebugLogger{},
-		ReconnectInterval: time.Second * 5,
+		Logger: &stdDebugLogger{},
 	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
 
-	chManager, err := newChannelManager(url, config, options.Logger, options.ReconnectInterval)
-	if err != nil {
-		return Consumer{}, err
+	if conn.connectionManager == nil {
+		return nil, errors.New("connection manager can't be nil")
 	}
-	consumer := Consumer{
-		chManager: chManager,
-		logger:    options.Logger,
-	}
-	return consumer, nil
-}
+	reconnectErrCh, closeCh := conn.connectionManager.NotifyReconnect()
 
-// WithConsumerOptionsReconnectInterval sets the interval at which the consumer will
-// attempt to reconnect to the rabbit server
-func WithConsumerOptionsReconnectInterval(reconnectInterval time.Duration) func(options *ConsumerOptions) {
-	return func(options *ConsumerOptions) {
-		options.ReconnectInterval = reconnectInterval
+	consumer := &Consumer{
+		connManager:                conn.connectionManager,
+		reconnectErrCh:             reconnectErrCh,
+		closeConnectionToManagerCh: closeCh,
+		options:                    *options,
 	}
+
+	return consumer, nil
 }
 
 // WithConsumerOptionsLogging uses a default logger that writes to std out
@@ -78,7 +76,7 @@ func WithConsumerOptionsLogging(options *ConsumerOptions) {
 
 // WithConsumerOptionsLogger sets logging to a custom interface.
 // Use WithConsumerOptionsLogging to just log to stdout.
-func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
+func WithConsumerOptionsLogger(log logger.Logger) func(options *ConsumerOptions) {
 	return func(options *ConsumerOptions) {
 		options.Logger = log
 	}
@@ -88,7 +86,7 @@ func WithConsumerOptionsLogger(log Logger) func(options *ConsumerOptions) {
 // Each goroutine spawns a handler that consumes off of the given queue which binds to the routing key(s).
 // The provided handler is called once for each message. If the provided queue doesn't exist, it
 // will be created on the cluster
-func (consumer Consumer) StartConsuming(
+func (consumer *Consumer) StartConsuming(
 	handler Handler,
 	queue string,
 	optionFuncs ...func(*ConsumeOptions),
@@ -108,14 +106,14 @@ func (consumer Consumer) StartConsuming(
 	}
 
 	go func() {
-		for err := range consumer.chManager.notifyCancelOrClose {
-			consumer.logger.Infof("successful recovery from: %v", err)
+		for err := range consumer.reconnectErrCh {
+			consumer.options.Logger.Infof("successful recovery from: %v", err)
 			err = consumer.startGoroutines(
 				handler,
 				*options,
 			)
 			if err != nil {
-				consumer.logger.Errorf("error restarting consumer goroutines after cancel or close: %v", err)
+				consumer.options.Logger.Errorf("error restarting consumer goroutines after cancel or close: %v", err)
 			}
 		}
 	}()
@@ -123,59 +121,57 @@ func (consumer Consumer) StartConsuming(
 }
 
 // Close cleans up resources and closes the consumer.
-// The consumer is not safe for reuse
-func (consumer Consumer) Close() error {
-	consumer.chManager.logger.Infof("closing consumer...")
-	return consumer.chManager.close()
+// It does not close the connection manager, just the subscription
+// to the connection manager
+func (consumer *Consumer) Close() {
+	consumer.options.Logger.Infof("closing consumer...")
+	consumer.closeConnectionToManagerCh <- struct{}{}
 }
 
 // startGoroutines declares the queue if it doesn't exist,
 // binds the queue to the routing key(s), and starts the goroutines
 // that will consume from the queue
-func (consumer Consumer) startGoroutines(
+func (consumer *Consumer) startGoroutines(
 	handler Handler,
-	consumeOptions ConsumeOptions,
+	options ConsumeOptions,
 ) error {
-	err := handleDeclare(consumer.chManager, consumeOptions.DeclareOptions)
+
+	err := declareExchange(consumer.connManager, options.ExchangeOptions)
 	if err != nil {
-		return fmt.Errorf("declare failed: %w", err)
+		return fmt.Errorf("declare exchange failed: %w", err)
+	}
+	err = declareQueue(consumer.connManager, options.QueueOptions)
+	if err != nil {
+		return fmt.Errorf("declare queue failed: %w", err)
+	}
+	err = declareBindings(consumer.connManager, options)
+	if err != nil {
+		return fmt.Errorf("declare bindings failed: %w", err)
 	}
 
-	consumer.chManager.channelMux.RLock()
-	defer consumer.chManager.channelMux.RUnlock()
-
-	err = consumer.chManager.channel.Qos(
-		consumeOptions.QOSPrefetch,
-		0,
-		consumeOptions.QOSGlobal,
+	msgs, err := consumer.connManager.ConsumeSafe(
+		options.QueueOptions.Name,
+		options.RabbitConsumerOptions.Name,
+		options.RabbitConsumerOptions.AutoAck,
+		options.RabbitConsumerOptions.Exclusive,
+		false, // no-local is not supported by RabbitMQ
+		options.RabbitConsumerOptions.NoWait,
+		tableToAMQPTable(options.RabbitConsumerOptions.Args),
 	)
 	if err != nil {
 		return err
 	}
 
-	msgs, err := consumer.chManager.channel.Consume(
-		consumeOptions.QueueName,
-		consumeOptions.ConsumerName,
-		consumeOptions.ConsumerAutoAck,
-		consumeOptions.ConsumerExclusive,
-		consumeOptions.ConsumerNoLocal, // no-local is not supported by RabbitMQ
-		consumeOptions.ConsumerNoWait,
-		tableToAMQPTable(consumeOptions.ConsumerArgs),
-	)
-	if err != nil {
-		return err
+	for i := 0; i < options.Concurrency; i++ {
+		go handlerGoroutine(consumer, msgs, options, handler)
 	}
-
-	for i := 0; i < consumeOptions.Concurrency; i++ {
-		go handlerGoroutine(consumer, msgs, consumeOptions, handler)
-	}
-	consumer.logger.Infof("Processing messages on %v goroutines", consumeOptions.Concurrency)
+	consumer.options.Logger.Infof("Processing messages on %v goroutines", options.Concurrency)
 	return nil
 }
 
-func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptions ConsumeOptions, handler Handler) {
+func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOptions ConsumeOptions, handler Handler) {
 	for msg := range msgs {
-		if consumeOptions.ConsumerAutoAck {
+		if consumeOptions.RabbitConsumerOptions.AutoAck {
 			handler(Delivery{msg})
 			continue
 		}
@@ -183,19 +179,19 @@ func handlerGoroutine(consumer Consumer, msgs <-chan amqp.Delivery, consumeOptio
 		case Ack:
 			err := msg.Ack(false)
 			if err != nil {
-				consumer.logger.Errorf("can't ack message: %v", err)
+				consumer.options.Logger.Errorf("can't ack message: %v", err)
 			}
 		case NackDiscard:
 			err := msg.Nack(false, false)
 			if err != nil {
-				consumer.logger.Errorf("can't nack message: %v", err)
+				consumer.options.Logger.Errorf("can't nack message: %v", err)
 			}
 		case NackRequeue:
 			err := msg.Nack(false, true)
 			if err != nil {
-				consumer.logger.Errorf("can't nack message: %v", err)
+				consumer.options.Logger.Errorf("can't nack message: %v", err)
 			}
 		}
 	}
-	consumer.logger.Infof("rabbit consumer goroutine closed")
+	consumer.options.Logger.Infof("rabbit consumer goroutine closed")
 }

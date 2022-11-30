@@ -13,19 +13,22 @@ import (
 var consumerName = "example"
 
 func main() {
+	conn, err := rabbitmq.NewConn(
+		"amqp://guest:guest@localhost",
+		rabbitmq.WithConnectionOptionsLogging,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	consumer, err := rabbitmq.NewConsumer(
-		"amqp://guest:guest@localhost", rabbitmq.Config{},
+		conn,
 		rabbitmq.WithConsumerOptionsLogging,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		err := consumer.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	defer consumer.Close()
 
 	err = consumer.StartConsuming(
 		func(d rabbitmq.Delivery) rabbitmq.Action {
@@ -34,13 +37,35 @@ func main() {
 			return rabbitmq.Ack
 		},
 		"my_queue",
-		rabbitmq.WithConsumeOptionsConcurrency(10),
+		rabbitmq.WithConsumeOptionsConcurrency(2),
 		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
-		rabbitmq.WithConsumeDeclareOptions(
-			// creates a the queue if it doesn't exist yet
-			rabbitmq.WithDeclareQueueDurable,
-			rabbitmq.WithDeclareBindingsForRoutingKeys([]string{"my_routing_key"}),
-		),
+		rabbitmq.WithConsumeOptionsDefaultBinding("my_routing_key"),
+		rabbitmq.WithConsumeOptionsExchangeName("events"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	consumer2, err := rabbitmq.NewConsumer(
+		conn,
+		rabbitmq.WithConsumerOptionsLogging,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer consumer2.Close()
+
+	err = consumer2.StartConsuming(
+		func(d rabbitmq.Delivery) rabbitmq.Action {
+			log.Printf("consumed 2: %v", string(d.Body))
+			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+			return rabbitmq.Ack
+		},
+		"my_queue_2",
+		rabbitmq.WithConsumeOptionsConcurrency(2),
+		rabbitmq.WithConsumeOptionsConsumerName("consumer3"),
+		rabbitmq.WithConsumeOptionsDefaultBinding("my_routing_key"),
+		rabbitmq.WithConsumeOptionsExchangeName("events"),
 	)
 	if err != nil {
 		log.Fatal(err)
