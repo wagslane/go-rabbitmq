@@ -28,14 +28,34 @@ func main() {
 			return rabbitmq.Ack
 		},
 		"my_queue",
+		rabbitmq.WithConsumerOptionsConcurrency(2),
+		rabbitmq.WithConsumerOptionsConsumerName("consumer_1"),
 		rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key"),
+		rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key_2"),
 		rabbitmq.WithConsumerOptionsExchangeName("events"),
-		rabbitmq.WithConsumerOptionsExchangeDeclare,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer consumer.Close()
+
+	consumer2, err := rabbitmq.NewConsumer(
+		conn,
+		func(d rabbitmq.Delivery) rabbitmq.Action {
+			log.Printf("consumed 2: %v", string(d.Body))
+			// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+			return rabbitmq.Ack
+		},
+		"my_queue",
+		rabbitmq.WithConsumerOptionsConcurrency(2),
+		rabbitmq.WithConsumerOptionsConsumerName("consumer_2"),
+		rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key"),
+		rabbitmq.WithConsumerOptionsExchangeName("events"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer consumer2.Close()
 
 	// block main thread - wait for shutdown signal
 	sigs := make(chan os.Signal, 1)

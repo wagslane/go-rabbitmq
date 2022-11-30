@@ -39,6 +39,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer conn.Close()
+
+	conn.NotifyReturn(func(r rabbitmq.Return) {
+		log.Printf("message returned from server: %s", string(r.Body))
+	})
 
 	publisher, err := rabbitmq.NewPublisher(
 		conn,
@@ -58,11 +63,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	returns := conn.NotifyReturn()
-	go func() {
-		for r := range returns {
-			log.Printf("message returned from server: %s", string(r.Body))
-		}
-	}()
 }

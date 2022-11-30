@@ -135,8 +135,8 @@ func (connManager *ConnectionManager) reconnect() error {
 	return nil
 }
 
-// close safely closes the current channel and connection
-func (connManager *ConnectionManager) close() error {
+// Close safely closes the current channel and connection
+func (connManager *ConnectionManager) Close() error {
 	connManager.logger.Infof("closing connection manager...")
 	connManager.channelMux.Lock()
 	defer connManager.channelMux.Unlock()

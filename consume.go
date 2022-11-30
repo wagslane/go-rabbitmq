@@ -3,10 +3,10 @@ package rabbitmq
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
-	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
 
 // Action is an action that occurs after processed this delivery
@@ -30,12 +30,9 @@ type Consumer struct {
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 	options                    ConsumerOptions
-}
 
-// ConsumerOptions are used to describe a consumer's configuration.
-// Logger specifies a custom Logger interface implementation.
-type ConsumerOptions struct {
-	Logger logger.Logger
+	isClosedMux *sync.RWMutex
+	isClosed    bool
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -46,10 +43,16 @@ type Delivery struct {
 }
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
-func NewConsumer(conn *Conn, optionFuncs ...func(*ConsumerOptions)) (*Consumer, error) {
-	options := &ConsumerOptions{
-		Logger: &stdDebugLogger{},
-	}
+// it also starts consuming on the given connection with automatic reconnection handling
+// Do do reuse the returned consumer for anything other than to close it
+func NewConsumer(
+	conn *Conn,
+	handler Handler,
+	queue string,
+	optionFuncs ...func(*ConsumerOptions),
+) (*Consumer, error) {
+	defaultOptions := getDefaultConsumerOptions(queue)
+	options := &defaultOptions
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -64,37 +67,8 @@ func NewConsumer(conn *Conn, optionFuncs ...func(*ConsumerOptions)) (*Consumer, 
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
-	}
-
-	return consumer, nil
-}
-
-// WithConsumerOptionsLogging uses a default logger that writes to std out
-func WithConsumerOptionsLogging(options *ConsumerOptions) {
-	options.Logger = &stdDebugLogger{}
-}
-
-// WithConsumerOptionsLogger sets logging to a custom interface.
-// Use WithConsumerOptionsLogging to just log to stdout.
-func WithConsumerOptionsLogger(log logger.Logger) func(options *ConsumerOptions) {
-	return func(options *ConsumerOptions) {
-		options.Logger = log
-	}
-}
-
-// StartConsuming starts n goroutines where n="ConsumeOptions.QosOptions.Concurrency".
-// Each goroutine spawns a handler that consumes off of the given queue which binds to the routing key(s).
-// The provided handler is called once for each message. If the provided queue doesn't exist, it
-// will be created on the cluster
-func (consumer *Consumer) StartConsuming(
-	handler Handler,
-	queue string,
-	optionFuncs ...func(*ConsumeOptions),
-) error {
-	defaultOptions := getDefaultConsumeOptions(queue)
-	options := &defaultOptions
-	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
+		isClosedMux:                &sync.RWMutex{},
+		isClosed:                   false,
 	}
 
 	err := consumer.startGoroutines(
@@ -102,7 +76,7 @@ func (consumer *Consumer) StartConsuming(
 		*options,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	go func() {
@@ -117,15 +91,22 @@ func (consumer *Consumer) StartConsuming(
 			}
 		}
 	}()
-	return nil
+
+	return consumer, nil
 }
 
 // Close cleans up resources and closes the consumer.
 // It does not close the connection manager, just the subscription
-// to the connection manager
+// to the connection manager and the consuming goroutines.
+// Only call once.
 func (consumer *Consumer) Close() {
+	consumer.isClosedMux.Lock()
+	defer consumer.isClosedMux.Unlock()
+	consumer.isClosed = true
 	consumer.options.Logger.Infof("closing consumer...")
-	consumer.closeConnectionToManagerCh <- struct{}{}
+	go func() {
+		consumer.closeConnectionToManagerCh <- struct{}{}
+	}()
 }
 
 // startGoroutines declares the queue if it doesn't exist,
@@ -133,7 +114,7 @@ func (consumer *Consumer) Close() {
 // that will consume from the queue
 func (consumer *Consumer) startGoroutines(
 	handler Handler,
-	options ConsumeOptions,
+	options ConsumerOptions,
 ) error {
 
 	err := declareExchange(consumer.connManager, options.ExchangeOptions)
@@ -169,12 +150,23 @@ func (consumer *Consumer) startGoroutines(
 	return nil
 }
 
-func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOptions ConsumeOptions, handler Handler) {
+func (consumer *Consumer) getIsClosed() bool {
+	consumer.isClosedMux.RLock()
+	defer consumer.isClosedMux.RUnlock()
+	return consumer.isClosed
+}
+
+func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOptions ConsumerOptions, handler Handler) {
 	for msg := range msgs {
+		if consumer.getIsClosed() {
+			break
+		}
+
 		if consumeOptions.RabbitConsumerOptions.AutoAck {
 			handler(Delivery{msg})
 			continue
 		}
+
 		switch handler(Delivery{msg}) {
 		case Ack:
 			err := msg.Ack(false)

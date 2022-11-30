@@ -70,7 +70,7 @@ func declareExchange(connManager *connectionmanager.ConnectionManager, options E
 	return nil
 }
 
-func declareBindings(connManager *connectionmanager.ConnectionManager, options ConsumeOptions) error {
+func declareBindings(connManager *connectionmanager.ConnectionManager, options ConsumerOptions) error {
 	for _, binding := range options.Bindings {
 		if !binding.Declare {
 			continue

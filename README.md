@@ -50,9 +50,9 @@ err = consumer.StartConsuming(
 		},
 		"my_queue",
 		// spawns 10 goroutines to handle incoming messages
-		rabbitmq.WithConsumeOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
 		// assigns a name to this consumer on the cluster
-		rabbitmq.WithConsumeOptionsConsumerName(consumerName),
+		rabbitmq.WithConsumerOptionsConsumerName(consumerName),
 		rabbitmq.WithConsumeDeclareOptions(
 			// creates a durable queue named "my_queue"
 			// if it doesn't exist yet

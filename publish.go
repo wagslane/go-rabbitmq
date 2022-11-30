@@ -53,35 +53,14 @@ type Publisher struct {
 	options PublisherOptions
 }
 
-// PublisherOptions are used to describe a publisher's configuration.
-// Logger is a custom logging interface.
-type PublisherOptions struct {
-	Logger Logger
-}
-
-// WithPublisherOptionsLogging sets logging to true on the consumer options
-// and sets the
-func WithPublisherOptionsLogging(options *PublisherOptions) {
-	options.Logger = &stdDebugLogger{}
-}
-
-// WithPublisherOptionsLogger sets logging to a custom interface.
-// Use WithPublisherOptionsLogging to just log to stdout.
-func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
-	return func(options *PublisherOptions) {
-		options.Logger = log
-	}
-}
-
 // NewPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
 // Flow controls are automatically handled as they are sent from the server, and publishing
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
-	options := &PublisherOptions{
-		Logger: &stdDebugLogger{},
-	}
+	defaultOptions := getDefaultPublisherOptions()
+	options := &defaultOptions
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -101,19 +80,34 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		options:                       *options,
 	}
 
-	go publisher.startNotifyFlowHandler()
-	go publisher.startNotifyBlockedHandler()
+	err := publisher.startup()
+	if err != nil {
+		return nil, err
+	}
 
 	go publisher.handleRestarts()
 
 	return publisher, nil
 }
 
+func (publisher *Publisher) startup() error {
+	err := declareExchange(publisher.connManager, publisher.options.ExchangeOptions)
+	if err != nil {
+		return fmt.Errorf("declare exchange failed: %w", err)
+	}
+	go publisher.startNotifyFlowHandler()
+	go publisher.startNotifyBlockedHandler()
+	return nil
+}
+
 func (publisher *Publisher) handleRestarts() {
 	for err := range publisher.reconnectErrCh {
 		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
-		go publisher.startNotifyFlowHandler()
-		go publisher.startNotifyBlockedHandler()
+		err := publisher.startup()
+		if err != nil {
+			publisher.options.Logger.Infof("failed to startup publisher: %v", err)
+			continue
+		}
 	}
 }
 
@@ -177,7 +171,10 @@ func (publisher *Publisher) Publish(
 
 // Close closes the publisher and releases resources
 // The publisher should be discarded as it's not safe for re-use
+// Only call Close() once
 func (publisher *Publisher) Close() {
 	publisher.options.Logger.Infof("closing publisher...")
-	publisher.closeConnectionToManagerCh <- struct{}{}
+	go func() {
+		publisher.closeConnectionToManagerCh <- struct{}{}
+	}()
 }

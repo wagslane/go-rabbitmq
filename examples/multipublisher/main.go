@@ -40,6 +40,17 @@ func main() {
 	}
 	defer publisher.Close()
 
+	publisher2, err := rabbitmq.NewPublisher(
+		conn,
+		rabbitmq.WithPublisherOptionsLogging,
+		rabbitmq.WithPublisherOptionsExchangeName("events"),
+		rabbitmq.WithPublisherOptionsExchangeDeclare,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer publisher2.Close()
+
 	// block main thread - wait for shutdown signal
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
@@ -62,6 +73,17 @@ func main() {
 			err = publisher.Publish(
 				[]byte("hello, world"),
 				[]string{"my_routing_key"},
+				rabbitmq.WithPublishOptionsContentType("application/json"),
+				rabbitmq.WithPublishOptionsMandatory,
+				rabbitmq.WithPublishOptionsPersistentDelivery,
+				rabbitmq.WithPublishOptionsExchange("events"),
+			)
+			if err != nil {
+				log.Println(err)
+			}
+			err = publisher2.Publish(
+				[]byte("hello, world 2"),
+				[]string{"my_routing_key_2"},
 				rabbitmq.WithPublishOptionsContentType("application/json"),
 				rabbitmq.WithPublishOptionsMandatory,
 				rabbitmq.WithPublishOptionsPersistentDelivery,
