@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
 )
 
@@ -40,6 +41,7 @@ type Confirmation struct {
 
 // Publisher allows you to publish messages safely across an open connection
 type Publisher struct {
+	chanManager                *channelmanager.ChannelManager
 	connManager                *connectionmanager.ConnectionManager
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
@@ -49,6 +51,10 @@ type Publisher struct {
 
 	disablePublishDueToBlocked    bool
 	disablePublishDueToBlockedMux *sync.RWMutex
+
+	handlerMux           *sync.Mutex
+	notifyReturnHandler  func(r Return)
+	notifyPublishHandler func(p Confirmation)
 
 	options PublisherOptions
 }
@@ -68,8 +74,15 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 	if conn.connectionManager == nil {
 		return nil, errors.New("connection manager can't be nil")
 	}
-	reconnectErrCh, closeCh := conn.connectionManager.NotifyReconnect()
+
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	reconnectErrCh, closeCh := chanManager.NotifyReconnect()
 	publisher := &Publisher{
+		chanManager:                   chanManager,
 		connManager:                   conn.connectionManager,
 		reconnectErrCh:                reconnectErrCh,
 		closeConnectionToManagerCh:    closeCh,
@@ -77,10 +90,13 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		disablePublishDueToFlowMux:    &sync.RWMutex{},
 		disablePublishDueToBlocked:    false,
 		disablePublishDueToBlockedMux: &sync.RWMutex{},
+		handlerMux:                    &sync.Mutex{},
+		notifyReturnHandler:           nil,
+		notifyPublishHandler:          nil,
 		options:                       *options,
 	}
 
-	err := publisher.startup()
+	err = publisher.startup()
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +107,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 }
 
 func (publisher *Publisher) startup() error {
-	err := declareExchange(publisher.connManager, publisher.options.ExchangeOptions)
+	err := declareExchange(publisher.chanManager, publisher.options.ExchangeOptions)
 	if err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
@@ -108,6 +124,8 @@ func (publisher *Publisher) handleRestarts() {
 			publisher.options.Logger.Infof("failed to startup publisher: %v", err)
 			continue
 		}
+		go publisher.startReturnHandler()
+		go publisher.startPublishHandler()
 	}
 }
 
@@ -155,7 +173,7 @@ func (publisher *Publisher) Publish(
 		message.AppId = options.AppID
 
 		// Actual publish.
-		err := publisher.connManager.PublishSafe(
+		err := publisher.chanManager.PublishSafe(
 			options.Exchange,
 			routingKey,
 			options.Mandatory,
@@ -177,4 +195,65 @@ func (publisher *Publisher) Close() {
 	go func() {
 		publisher.closeConnectionToManagerCh <- struct{}{}
 	}()
+}
+
+// NotifyReturn registers a listener for basic.return methods.
+// These can be sent from the server when a publish is undeliverable either from the mandatory or immediate flags.
+// These notifications are shared across an entire connection, so if you're creating multiple
+// publishers on the same connection keep that in mind
+func (publisher *Publisher) NotifyReturn(handler func(r Return)) {
+	publisher.handlerMux.Lock()
+	start := publisher.notifyReturnHandler == nil
+	publisher.notifyReturnHandler = handler
+	publisher.handlerMux.Unlock()
+
+	if start {
+		go publisher.startReturnHandler()
+	}
+}
+
+// NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
+// These notifications are shared across an entire connection, so if you're creating multiple
+// publishers on the same connection keep that in mind
+func (publisher *Publisher) NotifyPublish(handler func(p Confirmation)) {
+	publisher.handlerMux.Lock()
+	start := publisher.notifyPublishHandler == nil
+	publisher.notifyPublishHandler = handler
+	publisher.handlerMux.Unlock()
+
+	if start {
+		go publisher.startPublishHandler()
+	}
+}
+
+func (publisher *Publisher) startReturnHandler() {
+	publisher.handlerMux.Lock()
+	if publisher.notifyReturnHandler == nil {
+		publisher.handlerMux.Unlock()
+		return
+	}
+	publisher.handlerMux.Unlock()
+
+	returns := publisher.chanManager.NotifyReturnSafe(make(chan amqp.Return, 1))
+	for ret := range returns {
+		go publisher.notifyReturnHandler(Return{ret})
+	}
+}
+
+func (publisher *Publisher) startPublishHandler() {
+	publisher.handlerMux.Lock()
+	if publisher.notifyPublishHandler == nil {
+		publisher.handlerMux.Unlock()
+		return
+	}
+	publisher.handlerMux.Unlock()
+
+	publisher.chanManager.ConfirmSafe(false)
+	confirmationCh := publisher.chanManager.NotifyPublishSafe(make(chan amqp.Confirmation, 1))
+	for conf := range confirmationCh {
+		go publisher.notifyPublishHandler(Confirmation{
+			Confirmation:      conf,
+			ReconnectionCount: int(publisher.chanManager.GetReconnectionCount()),
+		})
+	}
 }

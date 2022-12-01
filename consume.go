@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 )
 
 // Action is an action that occurs after processed this delivery
@@ -26,7 +26,7 @@ const (
 
 // Consumer allows you to create and connect to queues for data consumption.
 type Consumer struct {
-	connManager                *connectionmanager.ConnectionManager
+	chanManager                *channelmanager.ChannelManager
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 	options                    ConsumerOptions
@@ -60,10 +60,15 @@ func NewConsumer(
 	if conn.connectionManager == nil {
 		return nil, errors.New("connection manager can't be nil")
 	}
-	reconnectErrCh, closeCh := conn.connectionManager.NotifyReconnect()
+
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	if err != nil {
+		return nil, err
+	}
+	reconnectErrCh, closeCh := chanManager.NotifyReconnect()
 
 	consumer := &Consumer{
-		connManager:                conn.connectionManager,
+		chanManager:                chanManager,
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
@@ -71,7 +76,7 @@ func NewConsumer(
 		isClosed:                   false,
 	}
 
-	err := consumer.startGoroutines(
+	err = consumer.startGoroutines(
 		handler,
 		*options,
 	)
@@ -116,21 +121,28 @@ func (consumer *Consumer) startGoroutines(
 	handler Handler,
 	options ConsumerOptions,
 ) error {
-
-	err := declareExchange(consumer.connManager, options.ExchangeOptions)
+	err := consumer.chanManager.QosSafe(
+		options.QOSPrefetch,
+		0,
+		options.QOSGlobal,
+	)
+	if err != nil {
+		return fmt.Errorf("declare qos failed: %w", err)
+	}
+	err = declareExchange(consumer.chanManager, options.ExchangeOptions)
 	if err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
-	err = declareQueue(consumer.connManager, options.QueueOptions)
+	err = declareQueue(consumer.chanManager, options.QueueOptions)
 	if err != nil {
 		return fmt.Errorf("declare queue failed: %w", err)
 	}
-	err = declareBindings(consumer.connManager, options)
+	err = declareBindings(consumer.chanManager, options)
 	if err != nil {
 		return fmt.Errorf("declare bindings failed: %w", err)
 	}
 
-	msgs, err := consumer.connManager.ConsumeSafe(
+	msgs, err := consumer.chanManager.ConsumeSafe(
 		options.QueueOptions.Name,
 		options.RabbitConsumerOptions.Name,
 		options.RabbitConsumerOptions.AutoAck,

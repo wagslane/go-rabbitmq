@@ -1,4 +1,4 @@
-package connectionmanager
+package dispatcher
 
 import (
 	"log"
@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-type dispatcher struct {
+// Dispatcher -
+type Dispatcher struct {
 	subscribers    map[int]dispatchSubscriber
 	subscribersMux *sync.Mutex
 }
@@ -18,14 +19,16 @@ type dispatchSubscriber struct {
 	closeCh                 <-chan struct{}
 }
 
-func newDispatcher() *dispatcher {
-	return &dispatcher{
+// NewDispatcher -
+func NewDispatcher() *Dispatcher {
+	return &Dispatcher{
 		subscribers:    make(map[int]dispatchSubscriber),
 		subscribersMux: &sync.Mutex{},
 	}
 }
 
-func (d *dispatcher) dispatch(err error) error {
+// Dispatch -
+func (d *Dispatcher) Dispatch(err error) error {
 	d.subscribersMux.Lock()
 	defer d.subscribersMux.Unlock()
 	for _, subscriber := range d.subscribers {
@@ -38,7 +41,8 @@ func (d *dispatcher) dispatch(err error) error {
 	return nil
 }
 
-func (d *dispatcher) addSubscriber() (<-chan error, chan<- struct{}) {
+// AddSubscriber -
+func (d *Dispatcher) AddSubscriber() (<-chan error, chan<- struct{}) {
 	const maxRand = math.MaxInt64
 	const minRand = 0
 	id := rand.Intn(maxRand-minRand) + minRand

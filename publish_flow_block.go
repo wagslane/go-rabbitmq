@@ -5,7 +5,7 @@ import (
 )
 
 func (publisher *Publisher) startNotifyFlowHandler() {
-	notifyFlowChan := publisher.connManager.NotifyFlowSafe(make(chan bool))
+	notifyFlowChan := publisher.chanManager.NotifyFlowSafe(make(chan bool))
 	publisher.disablePublishDueToFlowMux.Lock()
 	publisher.disablePublishDueToFlow = false
 	publisher.disablePublishDueToFlowMux.Unlock()

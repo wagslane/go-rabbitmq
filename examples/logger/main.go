@@ -41,10 +41,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	conn.NotifyReturn(func(r rabbitmq.Return) {
-		log.Printf("message returned from server: %s", string(r.Body))
-	})
-
 	publisher, err := rabbitmq.NewPublisher(
 		conn,
 		rabbitmq.WithPublisherOptionsLogger(mylogger),
@@ -63,4 +59,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	publisher.NotifyReturn(func(r rabbitmq.Return) {
+		log.Printf("message returned from server: %s", string(r.Body))
+	})
 }

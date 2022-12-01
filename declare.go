@@ -1,15 +1,15 @@
 package rabbitmq
 
 import (
-	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 )
 
-func declareQueue(connManager *connectionmanager.ConnectionManager, options QueueOptions) error {
+func declareQueue(chanManager *channelmanager.ChannelManager, options QueueOptions) error {
 	if !options.Declare {
 		return nil
 	}
 	if options.Passive {
-		_, err := connManager.QueueDeclarePassiveSafe(
+		_, err := chanManager.QueueDeclarePassiveSafe(
 			options.Name,
 			options.Durable,
 			options.AutoDelete,
@@ -22,7 +22,7 @@ func declareQueue(connManager *connectionmanager.ConnectionManager, options Queu
 		}
 		return nil
 	}
-	_, err := connManager.QueueDeclareSafe(
+	_, err := chanManager.QueueDeclareSafe(
 		options.Name,
 		options.Durable,
 		options.AutoDelete,
@@ -36,12 +36,12 @@ func declareQueue(connManager *connectionmanager.ConnectionManager, options Queu
 	return nil
 }
 
-func declareExchange(connManager *connectionmanager.ConnectionManager, options ExchangeOptions) error {
+func declareExchange(chanManager *channelmanager.ChannelManager, options ExchangeOptions) error {
 	if !options.Declare {
 		return nil
 	}
 	if options.Passive {
-		err := connManager.ExchangeDeclarePassiveSafe(
+		err := chanManager.ExchangeDeclarePassiveSafe(
 			options.Name,
 			options.Kind,
 			options.Durable,
@@ -55,7 +55,7 @@ func declareExchange(connManager *connectionmanager.ConnectionManager, options E
 		}
 		return nil
 	}
-	err := connManager.ExchangeDeclareSafe(
+	err := chanManager.ExchangeDeclareSafe(
 		options.Name,
 		options.Kind,
 		options.Durable,
@@ -70,12 +70,12 @@ func declareExchange(connManager *connectionmanager.ConnectionManager, options E
 	return nil
 }
 
-func declareBindings(connManager *connectionmanager.ConnectionManager, options ConsumerOptions) error {
+func declareBindings(chanManager *channelmanager.ChannelManager, options ConsumerOptions) error {
 	for _, binding := range options.Bindings {
 		if !binding.Declare {
 			continue
 		}
-		err := connManager.QueueBindSafe(
+		err := chanManager.QueueBindSafe(
 			options.QueueOptions.Name,
 			binding.RoutingKey,
 			options.ExchangeOptions.Name,

@@ -21,14 +21,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	conn.NotifyReturn(func(r rabbitmq.Return) {
-		log.Printf("message returned from server: %s", string(r.Body))
-	})
-
-	conn.NotifyPublish(func(c rabbitmq.Confirmation) {
-		log.Printf("message confirmed from server. tag: %v, ack: %v", c.DeliveryTag, c.Ack)
-	})
-
 	publisher, err := rabbitmq.NewPublisher(
 		conn,
 		rabbitmq.WithPublisherOptionsLogging,
@@ -40,6 +32,14 @@ func main() {
 	}
 	defer publisher.Close()
 
+	publisher.NotifyReturn(func(r rabbitmq.Return) {
+		log.Printf("message returned from server: %s", string(r.Body))
+	})
+
+	publisher.NotifyPublish(func(c rabbitmq.Confirmation) {
+		log.Printf("message confirmed from server. tag: %v, ack: %v", c.DeliveryTag, c.Ack)
+	})
+
 	publisher2, err := rabbitmq.NewPublisher(
 		conn,
 		rabbitmq.WithPublisherOptionsLogging,
@@ -50,6 +50,14 @@ func main() {
 		log.Fatal(err)
 	}
 	defer publisher2.Close()
+
+	publisher2.NotifyReturn(func(r rabbitmq.Return) {
+		log.Printf("message returned from server: %s", string(r.Body))
+	})
+
+	publisher2.NotifyPublish(func(c rabbitmq.Confirmation) {
+		log.Printf("message confirmed from server. tag: %v, ack: %v", c.DeliveryTag, c.Ack)
+	})
 
 	// block main thread - wait for shutdown signal
 	sigs := make(chan os.Signal, 1)

@@ -40,6 +40,8 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 		Bindings:    []Binding{},
 		Concurrency: 1,
 		Logger:      stdDebugLogger{},
+		QOSPrefetch: 0,
+		QOSGlobal:   false,
 	}
 }
 
@@ -62,6 +64,8 @@ type ConsumerOptions struct {
 	Bindings              []Binding
 	Concurrency           int
 	Logger                logger.Logger
+	QOSPrefetch           int
+	QOSGlobal             bool
 }
 
 // RabbitConsumerOptions are used to configure the consumer
@@ -261,4 +265,20 @@ func WithConsumerOptionsLogger(log logger.Logger) func(options *ConsumerOptions)
 	return func(options *ConsumerOptions) {
 		options.Logger = log
 	}
+}
+
+// WithConsumerOptionsQOSPrefetch returns a function that sets the prefetch count, which means that
+// many messages will be fetched from the server in advance to help with throughput.
+// This doesn't affect the handler, messages are still processed one at a time.
+func WithConsumerOptionsQOSPrefetch(prefetchCount int) func(*ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.QOSPrefetch = prefetchCount
+	}
+}
+
+// WithConsumerOptionsQOSGlobal sets the qos on the channel to global, which means
+// these QOS settings apply to ALL existing and future
+// consumers on all channels on the same connection
+func WithConsumerOptionsQOSGlobal(options *ConsumerOptions) {
+	options.QOSGlobal = true
 }
