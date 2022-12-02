@@ -108,6 +108,13 @@ func (consumer *Consumer) Close() {
 	consumer.isClosedMux.Lock()
 	defer consumer.isClosedMux.Unlock()
 	consumer.isClosed = true
+	// close the channel so that rabbitmq server knows that the
+	// consumer has been stopped.
+	err := consumer.chanManager.Close()
+	if err != nil {
+		consumer.options.Logger.Warnf("error while closing the channel: %v", err)
+	}
+
 	consumer.options.Logger.Infof("closing consumer...")
 	go func() {
 		consumer.closeConnectionToManagerCh <- struct{}{}
