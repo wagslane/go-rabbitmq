@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -129,8 +130,22 @@ func (publisher *Publisher) handleRestarts() {
 	}
 }
 
-// Publish publishes the provided data to the given routing keys over the connection
+/*
+Publish publishes the provided data to the given routing keys over the connection.
+
+Deprecated: Use PublishWithContext instead.
+*/
 func (publisher *Publisher) Publish(
+	data []byte,
+	routingKeys []string,
+	optionFuncs ...func(*PublishOptions),
+) error {
+	return publisher.PublishWithContext(context.Background(), data, routingKeys, optionFuncs...)
+}
+
+// PublishWithContext publishes the provided data to the given routing keys over the connection.
+func (publisher *Publisher) PublishWithContext(
+	ctx context.Context,
 	data []byte,
 	routingKeys []string,
 	optionFuncs ...func(*PublishOptions),
@@ -156,7 +171,7 @@ func (publisher *Publisher) Publish(
 	}
 
 	for _, routingKey := range routingKeys {
-		var message = amqp.Publishing{}
+		message := amqp.Publishing{}
 		message.ContentType = options.ContentType
 		message.DeliveryMode = options.DeliveryMode
 		message.Body = data
@@ -173,7 +188,8 @@ func (publisher *Publisher) Publish(
 		message.AppId = options.AppID
 
 		// Actual publish.
-		err := publisher.chanManager.PublishSafe(
+		err := publisher.chanManager.PublishWithContextSafe(
+			ctx,
 			options.Exchange,
 			routingKey,
 			options.Mandatory,

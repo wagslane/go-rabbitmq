@@ -1,6 +1,8 @@
 package channelmanager
 
 import (
+	"context"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -133,7 +135,11 @@ func (chanManager *ChannelManager) QosSafe(
 	)
 }
 
-// PublishSafe safely wraps the (*amqp.Channel).Publish method
+/*
+PublishSafe safely wraps the (*amqp.Channel).Publish method.
+
+Deprecated: Use PublishWithContextSafe instead.
+*/
 func (chanManager *ChannelManager) PublishSafe(
 	exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) error {
@@ -141,6 +147,24 @@ func (chanManager *ChannelManager) PublishSafe(
 	defer chanManager.channelMux.RUnlock()
 
 	return chanManager.channel.Publish(
+		exchange,
+		key,
+		mandatory,
+		immediate,
+		msg,
+	)
+}
+
+
+// PublishWithContextSafe safely wraps the (*amqp.Channel).PublishWithContext method.
+func (chanManager *ChannelManager) PublishWithContextSafe(
+	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
+) error {
+	chanManager.channelMux.RLock()
+	defer chanManager.channelMux.RUnlock()
+
+	return chanManager.channel.PublishWithContext(
+		ctx,
 		exchange,
 		key,
 		mandatory,

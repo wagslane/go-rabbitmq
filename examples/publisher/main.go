@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -59,7 +60,8 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			err = publisher.Publish(
+			err = publisher.PublishWithContext(
+				context.Background(),
 				[]byte("hello, world"),
 				[]string{"my_routing_key"},
 				rabbitmq.WithPublishOptionsContentType("application/json"),
