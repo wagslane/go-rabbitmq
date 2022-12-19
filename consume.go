@@ -44,7 +44,7 @@ type Delivery struct {
 
 // NewConsumer returns a new Consumer connected to the given rabbitmq server
 // it also starts consuming on the given connection with automatic reconnection handling
-// Do do reuse the returned consumer for anything other than to close it
+// Do not reuse the returned consumer for anything other than to close it
 func NewConsumer(
 	conn *Conn,
 	handler Handler,
