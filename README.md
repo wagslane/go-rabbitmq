@@ -30,7 +30,7 @@ go get github.com/wagslane/go-rabbitmq
 
 ## 🚀 Quick Start Consumer
 
-Take note of the optional `options` parameters after the queue name. While not *necessary*, you'll *probably* want to at least declare the queue itself and some routing key bindings.
+Take note of the optional `options` parameters after the queue name. The *queue* will be declared automatically, but the *exchange* will not. You'll also *probably* want to bind to at least one routing key.
 
 ```go
 conn, err := rabbitmq.NewConn(
@@ -62,8 +62,7 @@ defer consumer.Close()
 
 ## 🚀 Quick Start Publisher
 
-Again, notice that all of the options functions aren't required, use them as you need them.
-
+The exchange is not declared by default, that's why I recommend using the following options.
 ```go
 conn, err := rabbitmq.NewConn(
 	"amqp://guest:guest@localhost",
@@ -102,15 +101,15 @@ See the [examples](examples) directory for more ideas.
 
 ## Options and configuring
 
-* By default, queues are created if they didn't already exist by new consumers
-* By default, routing-key bindings are created by consumers if they didn't exist if you're using `WithConsumerOptionsRoutingKey`
-* By default, exchanges are *not* created by publishers or consumers if they didn't already exist, hence `WithPublisherOptionsExchangeDeclare` and `WithConsumerOptionsExchangeDeclare`.
+* By default, queues are declared if they didn't already exist by new consumers
+* By default, routing-key bindings are declared by consumers if you're using `WithConsumerOptionsRoutingKey`
+* By default, exchanges are *not* declared by publishers or consumers if they didn't already exist, hence `WithPublisherOptionsExchangeDeclare` and `WithConsumerOptionsExchangeDeclare`.
 
 Read up on all the options in the GoDoc, there are quite a few of them. I try to pick sane and simple defaults.
 
 ## Closing and resources
 
-Close your publishers and consumers when you're done with them and don't attempt to reuse them. Only close the connection itself once you've closed all associated publishers and consumers.
+Close your publishers and consumers when you're done with them and do *not* attempt to reuse them. Only close the connection itself once you've closed all associated publishers and consumers.
 
 ## Stability
 
