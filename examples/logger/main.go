@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	rabbitmq "github.com/wagslane/go-rabbitmq"
@@ -48,7 +49,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = publisher.Publish(
+	err = publisher.PublishWithContext(
+		context.Background(),
 		[]byte("hello, world"),
 		[]string{"my_routing_key"},
 		rabbitmq.WithPublishOptionsContentType("application/json"),
