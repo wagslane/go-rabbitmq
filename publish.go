@@ -132,8 +132,6 @@ func (publisher *Publisher) handleRestarts() {
 
 /*
 Publish publishes the provided data to the given routing keys over the connection.
-
-Deprecated: Use PublishWithContext instead.
 */
 func (publisher *Publisher) Publish(
 	data []byte,

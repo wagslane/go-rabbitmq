@@ -137,8 +137,6 @@ func (chanManager *ChannelManager) QosSafe(
 
 /*
 PublishSafe safely wraps the (*amqp.Channel).Publish method.
-
-Deprecated: Use PublishWithContextSafe instead.
 */
 func (chanManager *ChannelManager) PublishSafe(
 	exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
@@ -154,7 +152,6 @@ func (chanManager *ChannelManager) PublishSafe(
 		msg,
 	)
 }
-
 
 // PublishWithContextSafe safely wraps the (*amqp.Channel).PublishWithContext method.
 func (chanManager *ChannelManager) PublishWithContextSafe(
