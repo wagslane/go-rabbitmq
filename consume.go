@@ -22,6 +22,8 @@ const (
 	NackDiscard
 	// NackRequeue deliver this message to a different consumer.
 	NackRequeue
+	// Message acknowledgement is left to the end user
+	Manual
 )
 
 // Consumer allows you to create and connect to queues for data consumption.
