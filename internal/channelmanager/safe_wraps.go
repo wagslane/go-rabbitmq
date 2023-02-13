@@ -144,7 +144,8 @@ func (chanManager *ChannelManager) PublishSafe(
 	chanManager.channelMux.RLock()
 	defer chanManager.channelMux.RUnlock()
 
-	return chanManager.channel.Publish(
+	return chanManager.channel.PublishWithContext(
+		context.Background(),
 		exchange,
 		key,
 		mandatory,
