@@ -7,9 +7,6 @@ import (
 
 func TestNewDispatcher(t *testing.T) {
 	d := NewDispatcher()
-	if d == nil {
-		t.Error("Dispatcher is nil")
-	}
 	if d.subscribers == nil {
 		t.Error("Dispatcher subscribers is nil")
 	}
