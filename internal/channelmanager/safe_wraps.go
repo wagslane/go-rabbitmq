@@ -171,6 +171,22 @@ func (chanManager *ChannelManager) PublishWithContextSafe(
 	)
 }
 
+func (chanManager *ChannelManager) PublishWithDeferredConfirmWithContextSafe(
+	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
+) (*amqp.DeferredConfirmation, error) {
+	chanManager.channelMux.RLock()
+	defer chanManager.channelMux.RUnlock()
+
+	return chanManager.channel.PublishWithDeferredConfirmWithContext(
+		ctx,
+		exchange,
+		key,
+		mandatory,
+		immediate,
+		msg,
+	)
+}
+
 // NotifyReturnSafe safely wraps the (*amqp.Channel).NotifyReturn method
 func (chanManager *ChannelManager) NotifyReturnSafe(
 	c chan amqp.Return,

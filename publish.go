@@ -60,6 +60,8 @@ type Publisher struct {
 	options PublisherOptions
 }
 
+type PublisherConfirmation []*amqp.DeferredConfirmation
+
 // NewPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
@@ -199,6 +201,68 @@ func (publisher *Publisher) PublishWithContext(
 		}
 	}
 	return nil
+}
+
+func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
+	ctx context.Context,
+	data []byte,
+	routingKeys []string,
+	optionFuncs ...func(*PublishOptions),
+) (PublisherConfirmation, error) {
+	publisher.disablePublishDueToFlowMux.RLock()
+	defer publisher.disablePublishDueToFlowMux.RUnlock()
+	if publisher.disablePublishDueToFlow {
+		return nil, fmt.Errorf("publishing blocked due to high flow on the server")
+	}
+
+	publisher.disablePublishDueToBlockedMux.RLock()
+	defer publisher.disablePublishDueToBlockedMux.RUnlock()
+	if publisher.disablePublishDueToBlocked {
+		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
+	}
+
+	options := &PublishOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+	if options.DeliveryMode == 0 {
+		options.DeliveryMode = Transient
+	}
+
+	var deferredConfirmations []*amqp.DeferredConfirmation
+
+	for _, routingKey := range routingKeys {
+		message := amqp.Publishing{}
+		message.ContentType = options.ContentType
+		message.DeliveryMode = options.DeliveryMode
+		message.Body = data
+		message.Headers = tableToAMQPTable(options.Headers)
+		message.Expiration = options.Expiration
+		message.ContentEncoding = options.ContentEncoding
+		message.Priority = options.Priority
+		message.CorrelationId = options.CorrelationID
+		message.ReplyTo = options.ReplyTo
+		message.MessageId = options.MessageID
+		message.Timestamp = options.Timestamp
+		message.Type = options.Type
+		message.UserId = options.UserID
+		message.AppId = options.AppID
+
+		// Actual publish.
+		conf, err := publisher.chanManager.PublishWithDeferredConfirmWithContextSafe(
+			ctx,
+			options.Exchange,
+			routingKey,
+			options.Mandatory,
+			options.Immediate,
+			message,
+		)
+		if err != nil {
+			return nil, err
+		}
+		deferredConfirmations = append(deferredConfirmations, conf)
+	}
+	return deferredConfirmations, nil
 }
 
 // Close closes the publisher and releases resources
