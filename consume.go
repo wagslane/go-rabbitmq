@@ -88,7 +88,7 @@ func NewConsumer(
 
 	go func() {
 		for err := range consumer.reconnectErrCh {
-			consumer.options.Logger.Infof("successful recovery from: %v", err)
+			consumer.options.Logger.Infof("successful consumer recovery from: %v", err)
 			err = consumer.startGoroutines(
 				handler,
 				*options,
