@@ -43,7 +43,7 @@ func (d *Dispatcher) Dispatch(err error) error {
 
 // AddSubscriber -
 func (d *Dispatcher) AddSubscriber() (<-chan error, chan<- struct{}) {
-	const maxRand = math.MaxInt64
+	const maxRand = math.MaxInt
 	const minRand = 0
 	id := rand.Intn(maxRand-minRand) + minRand
 
