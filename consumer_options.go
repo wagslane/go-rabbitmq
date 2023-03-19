@@ -40,7 +40,7 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 		Bindings:    []Binding{},
 		Concurrency: 1,
 		Logger:      stdDebugLogger{},
-		QOSPrefetch: 0,
+		QOSPrefetch: 10,
 		QOSGlobal:   false,
 	}
 }
