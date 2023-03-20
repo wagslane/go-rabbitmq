@@ -1,4 +1,4 @@
-all: prepare-integration test vet staticcheck clean-integration
+all: test vet staticcheck
 
 test:
 	go test -v ./...
@@ -8,9 +8,3 @@ vet:
 
 staticcheck:
 	staticcheck ./...
-
-prepare-integration:
-	docker compose up -d
-
-clean-integration:
-	docker compose down -v
