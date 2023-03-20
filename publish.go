@@ -104,7 +104,19 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		return nil, err
 	}
 
-	go publisher.handleRestarts()
+	go func() {
+		for err := range publisher.reconnectErrCh {
+			publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
+			err := publisher.startup()
+			if err != nil {
+				publisher.options.Logger.Fatalf("error on startup for publisher after cancel or close: %v", err)
+				publisher.options.Logger.Fatalf("publisher closing, unable to recover")
+				return
+			}
+			go publisher.startReturnHandler()
+			go publisher.startPublishHandler()
+		}
+	}()
 
 	return publisher, nil
 }
@@ -117,19 +129,6 @@ func (publisher *Publisher) startup() error {
 	go publisher.startNotifyFlowHandler()
 	go publisher.startNotifyBlockedHandler()
 	return nil
-}
-
-func (publisher *Publisher) handleRestarts() {
-	for err := range publisher.reconnectErrCh {
-		publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
-		err := publisher.startup()
-		if err != nil {
-			publisher.options.Logger.Infof("failed to startup publisher: %v", err)
-			continue
-		}
-		go publisher.startReturnHandler()
-		go publisher.startPublishHandler()
-	}
 }
 
 /*
