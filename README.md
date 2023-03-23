@@ -119,7 +119,7 @@ Note that the API is currently in `v0`. I don't plan on huge changes, but there 
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/wagslane.svg?label=Follow%20Wagslane&style=social)](https://twitter.com/intent/follow?screen_name=wagslane)
 
-Submit an issue (above in the issues tab)
+Submit an issue here on GitHub
 
 ## Transient Dependencies
 
