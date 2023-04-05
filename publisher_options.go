@@ -7,6 +7,7 @@ import amqp "github.com/rabbitmq/amqp091-go"
 type PublisherOptions struct {
 	ExchangeOptions ExchangeOptions
 	Logger          Logger
+	ConfirmMode     bool
 }
 
 // getDefaultPublisherOptions describes the options that will be used when a value isn't provided
@@ -23,7 +24,8 @@ func getDefaultPublisherOptions() PublisherOptions {
 			Args:       Table{},
 			Declare:    false,
 		},
-		Logger: stdDebugLogger{},
+		Logger:      stdDebugLogger{},
+		ConfirmMode: false,
 	}
 }
 
@@ -90,4 +92,10 @@ func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
 		options.ExchangeOptions.Args = args
 	}
+}
+
+// WithPublisherOptionsConfirm enables confirm mode on the connection
+// this is required if publisher confirmations should be used
+func WithPublisherOptionsConfirm(options *PublisherOptions) {
+	options.ConfirmMode = true
 }
