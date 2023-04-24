@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/DizoftTeam/go-rabbitmq/internal/channelmanager"
 )
@@ -28,17 +27,23 @@ func NewDeclarator(conn *Conn) (*Declarator, error) {
 	return result, nil
 }
 
-func (d *Declarator) Declare(queue string, optionFuncs ...func(*ConsumerOptions)) error {
-	defaultOptions := getDefaultConsumerOptions(queue)
-	options := &defaultOptions
-	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
-	}
+func (d *Declarator) Close() {
+	d.chanManager.Close()
+}
 
-	err := declareBindings(d.chanManager, *options)
+func (d *Declarator) Declare(bindings []ExchangeBinding) error {
+	for _, binding := range bindings {
+		err := d.chanManager.ExchangeBindSafe(
+			binding.From,
+			binding.To,
+			binding.RoutingKey,
+			binding.NoWait,
+			tableToAMQPTable(binding.Args),
+		)
 
-	if err != nil {
-		return fmt.Errorf("declare bindings failed: %w", err)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -115,6 +120,7 @@ func declareBindings(chanManager *channelmanager.ChannelManager, options Consume
 		if !binding.Declare {
 			continue
 		}
+
 		err := chanManager.QueueBindSafe(
 			options.QueueOptions.Name,
 			binding.RoutingKey,
@@ -122,9 +128,11 @@ func declareBindings(chanManager *channelmanager.ChannelManager, options Consume
 			binding.NoWait,
 			tableToAMQPTable(binding.Args),
 		)
+
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

@@ -105,6 +105,21 @@ func (chanManager *ChannelManager) ExchangeDeclareSafe(
 	)
 }
 
+func (chanManager *ChannelManager) ExchangeBindSafe(
+	from string, key string, to string, noWait bool, args amqp.Table,
+) error {
+	chanManager.channelMux.RLock()
+	defer chanManager.channelMux.RUnlock()
+
+	return chanManager.channel.ExchangeBind(
+		to,
+		key,
+		from,
+		noWait,
+		args,
+	)
+}
+
 // QueueBindSafe safely wraps the (*amqp.Channel).QueueBind method
 func (chanManager *ChannelManager) QueueBindSafe(
 	name string, key string, exchange string, noWait bool, args amqp.Table,
