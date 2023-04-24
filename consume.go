@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/DizoftTeam/go-rabbitmq/internal/channelmanager"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 )
 
 // Action is an action that occurs after processed this delivery

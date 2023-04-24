@@ -4,7 +4,7 @@ Wrapper of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) that pr
 
 Supported by [Boot.dev](https://boot.dev)
 
-[![](https://godoc.org/github.com/wagslane/go-rabbitmq?status.svg)](https://godoc.org/github.com/wagslane/go-rabbitmq)![Deploy](https://github.com/wagslane/go-rabbitmq/workflows/Tests/badge.svg)
+[![](https://godoc.org/github.com/DizoftTeam/go-rabbitmq?status.svg)](https://godoc.org/github.com/DizoftTeam/go-rabbitmq)![Deploy](https://github.com/DizoftTeam/go-rabbitmq/workflows/Tests/badge.svg)
 
 ## Motivation
 
@@ -25,7 +25,7 @@ The goal with `go-rabbitmq` is to provide *most* (but not all) of the nitty-grit
 Inside a Go module:
 
 ```bash
-go get github.com/wagslane/go-rabbitmq
+go get github.com/DizoftTeam/go-rabbitmq
 ```
 
 ## 🚀 Quick Start Consumer
