@@ -12,14 +12,11 @@ type Declarator struct {
 }
 
 func NewDeclarator(conn *Conn) (*Declarator, error) {
-	defaultOptions := getDefaultPublisherOptions()
-	options := &defaultOptions
-
 	if conn.connectionManager == nil {
 		return nil, errors.New("connection manager can't be nil")
 	}
 
-	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, &stdDebugLogger{}, conn.connectionManager.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -31,8 +28,14 @@ func NewDeclarator(conn *Conn) (*Declarator, error) {
 	return result, nil
 }
 
-func (d *Declarator) Declare(options ConsumerOptions) error {
-	err := declareBindings(d.chanManager, options)
+func (d *Declarator) Declare(queue string, optionFuncs ...func(*ConsumerOptions)) error {
+	defaultOptions := getDefaultConsumerOptions(queue)
+	options := &defaultOptions
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+
+	err := declareBindings(d.chanManager, *options)
 
 	if err != nil {
 		return fmt.Errorf("declare bindings failed: %w", err)
