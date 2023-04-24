@@ -1,8 +1,45 @@
 package rabbitmq
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/DizoftTeam/go-rabbitmq/internal/channelmanager"
 )
+
+type Declarator struct {
+	chanManager *channelmanager.ChannelManager
+}
+
+func NewDeclarator(conn *Conn) (*Declarator, error) {
+	defaultOptions := getDefaultPublisherOptions()
+	options := &defaultOptions
+
+	if conn.connectionManager == nil {
+		return nil, errors.New("connection manager can't be nil")
+	}
+
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &Declarator{
+		chanManager: chanManager,
+	}
+
+	return result, nil
+}
+
+func (d *Declarator) Declare(options ConsumerOptions) error {
+	err := declareBindings(d.chanManager, options)
+
+	if err != nil {
+		return fmt.Errorf("declare bindings failed: %w", err)
+	}
+
+	return nil
+}
 
 func declareQueue(chanManager *channelmanager.ChannelManager, options QueueOptions) error {
 	if !options.Declare {
