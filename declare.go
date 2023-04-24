@@ -35,8 +35,8 @@ func (d *Declarator) Declare(bindings []ExchangeBinding) error {
 	for _, binding := range bindings {
 		err := d.chanManager.ExchangeBindSafe(
 			binding.From,
-			binding.To,
 			binding.RoutingKey,
+			binding.To,
 			binding.NoWait,
 			tableToAMQPTable(binding.Args),
 		)
