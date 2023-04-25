@@ -31,12 +31,24 @@ func (d *Declarator) Close() {
 	d.chanManager.Close()
 }
 
-func (d *Declarator) DeclareExchange(options ExchangeOptions) error {
-	return declareExchange(d.chanManager, options)
+func (d *Declarator) DeclareExchange(optionFuncs ...func(*PublisherOptions)) error {
+	defaultOptions := getDefaultPublisherOptions()
+	options := &defaultOptions
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+
+	return declareExchange(d.chanManager, options.ExchangeOptions)
 }
 
-func (d *Declarator) DeclareQueue(options QueueOptions) error {
-	return declareQueue(d.chanManager, options)
+func (d *Declarator) DeclareQueue(queue string, optionFuncs ...func(*ConsumerOptions)) error {
+	defaultOptions := getDefaultConsumerOptions(queue)
+	options := &defaultOptions
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+
+	return declareQueue(d.chanManager, options.QueueOptions)
 }
 
 func (d *Declarator) BindExchanges(bindings []ExchangeBinding) error {
