@@ -31,7 +31,15 @@ func (d *Declarator) Close() {
 	d.chanManager.Close()
 }
 
-func (d *Declarator) Declare(bindings []ExchangeBinding) error {
+func (d *Declarator) DeclareExchange(options ExchangeOptions) error {
+	return declareExchange(d.chanManager, options)
+}
+
+func (d *Declarator) DeclareQueue(options QueueOptions) error {
+	return declareQueue(d.chanManager, options)
+}
+
+func (d *Declarator) BindExchanges(bindings []ExchangeBinding) error {
 	for _, binding := range bindings {
 		err := d.chanManager.ExchangeBindSafe(
 			binding.From,
