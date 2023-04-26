@@ -165,8 +165,17 @@ func (publisher *Publisher) PublishWithContext(
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
+
 	if options.DeliveryMode == 0 {
 		options.DeliveryMode = Transient
+	}
+
+	if options.Exchange == "" && publisher.options.ExchangeOptions.Name != "" {
+		options.Exchange = publisher.options.ExchangeOptions.Name
+	}
+
+	if options.Exchange == "" {
+		return fmt.Errorf("publishing to empty exchange")
 	}
 
 	for _, routingKey := range routingKeys {
