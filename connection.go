@@ -14,7 +14,7 @@ type Conn struct {
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 
-	reconnectHooks    []func()
+	reconnectHooks    []func(error)
 	looseConnectionCh <-chan error
 	mutex             *sync.RWMutex
 
@@ -59,13 +59,11 @@ func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error)
 }
 
 func (conn *Conn) handleLooseConnection() {
-	for {
-		<-conn.looseConnectionCh
-
+	for err := range conn.looseConnectionCh {
 		conn.mutex.Lock()
 
 		for _, fhook := range conn.reconnectHooks {
-			fhook()
+			fhook(err)
 		}
 
 		conn.mutex.Unlock()
@@ -78,7 +76,7 @@ func (conn *Conn) handleRestarts() {
 	}
 }
 
-func (conn *Conn) RegisterReconnectHook(hook func()) {
+func (conn *Conn) RegisterReconnectHook(hook func(error)) {
 	conn.mutex.Lock()
 	conn.reconnectHooks = append(conn.reconnectHooks, hook)
 	conn.mutex.Unlock()

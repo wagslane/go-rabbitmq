@@ -88,6 +88,7 @@ func (connManager *ConnectionManager) startNotifyClose() {
 		connManager.reconnectLoop()
 		connManager.logger.Warnf("successfully reconnected to amqp server")
 		connManager.dispatcher.Dispatch(err)
+		connManager.dispatcher.DispathLooseConnection(nil)
 	}
 
 	if err == nil {

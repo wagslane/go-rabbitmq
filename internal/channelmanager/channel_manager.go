@@ -40,7 +40,9 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 		reconnectionCountMux: &sync.Mutex{},
 		dispatcher:           dispatcher.NewDispatcher(),
 	}
+
 	go chanManager.startNotifyCancelOrClosed()
+
 	return &chanManager, nil
 }
 
@@ -52,6 +54,7 @@ func getNewChannel(connManager *connectionmanager.ConnectionManager) (*amqp.Chan
 	if err != nil {
 		return nil, err
 	}
+
 	return ch, nil
 }
 
@@ -71,6 +74,7 @@ func (chanManager *ChannelManager) startNotifyCancelOrClosed() {
 			chanManager.logger.Warnf("successfully reconnected to amqp server")
 			chanManager.dispatcher.Dispatch(err)
 		}
+
 		if err == nil {
 			chanManager.logger.Infof("amqp channel closed gracefully")
 		}
