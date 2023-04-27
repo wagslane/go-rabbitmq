@@ -67,7 +67,7 @@ func NewConsumer(
 	if err != nil {
 		return nil, err
 	}
-	reconnectErrCh, closeCh := chanManager.NotifyReconnect()
+	reconnectErrCh, closeCh, _ := chanManager.NotifyReconnect()
 
 	consumer := &Consumer{
 		chanManager:                chanManager,

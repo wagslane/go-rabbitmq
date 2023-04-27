@@ -83,7 +83,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		return nil, err
 	}
 
-	reconnectErrCh, closeCh := chanManager.NotifyReconnect()
+	reconnectErrCh, closeCh, _ := chanManager.NotifyReconnect()
 	publisher := &Publisher{
 		chanManager:                   chanManager,
 		connManager:                   conn.connectionManager,

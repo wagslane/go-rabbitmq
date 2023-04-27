@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	"sync"
+
 	"github.com/DizoftTeam/go-rabbitmq/internal/connectionmanager"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -11,6 +13,10 @@ type Conn struct {
 	connectionManager          *connectionmanager.ConnectionManager
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
+
+	reconnectHooks    []func()
+	looseConnectionCh <-chan error
+	mutex             *sync.RWMutex
 
 	options ConnectionOptions
 }
@@ -34,22 +40,48 @@ func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error)
 		return nil, err
 	}
 
-	reconnectErrCh, closeCh := manager.NotifyReconnect()
+	reconnectErrCh, closeCh, looseConnectionCh := manager.NotifyReconnect()
+
 	conn := &Conn{
 		connectionManager:          manager,
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
+		looseConnectionCh:          looseConnectionCh,
+
+		mutex: &sync.RWMutex{},
 	}
 
+	go conn.handleLooseConnection()
 	go conn.handleRestarts()
+
 	return conn, nil
+}
+
+func (conn *Conn) handleLooseConnection() {
+	for {
+		<-conn.looseConnectionCh
+
+		conn.mutex.Lock()
+
+		for _, fhook := range conn.reconnectHooks {
+			fhook()
+		}
+
+		conn.mutex.Unlock()
+	}
 }
 
 func (conn *Conn) handleRestarts() {
 	for err := range conn.reconnectErrCh {
 		conn.options.Logger.Infof("successful connection recovery from: %v", err)
 	}
+}
+
+func (conn *Conn) RegisterReconnectHook(hook func()) {
+	conn.mutex.Lock()
+	conn.reconnectHooks = append(conn.reconnectHooks, hook)
+	conn.mutex.Unlock()
 }
 
 // Close closes the connection, it's not safe for re-use.

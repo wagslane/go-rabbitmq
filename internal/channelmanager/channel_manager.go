@@ -144,6 +144,6 @@ func (chanManager *ChannelManager) Close() error {
 
 // NotifyReconnect adds a new subscriber that will receive error messages whenever
 // the connection manager has successfully reconnect to the server
-func (chanManager *ChannelManager) NotifyReconnect() (<-chan error, chan<- struct{}) {
+func (chanManager *ChannelManager) NotifyReconnect() (<-chan error, chan<- struct{}, <-chan error) {
 	return chanManager.dispatcher.AddSubscriber()
 }

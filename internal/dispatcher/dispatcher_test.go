@@ -25,7 +25,7 @@ func TestAddSubscriber(t *testing.T) {
 
 func TestCloseSubscriber(t *testing.T) {
 	d := NewDispatcher()
-	_, closeCh := d.AddSubscriber()
+	_, closeCh, _ := d.AddSubscriber()
 	close(closeCh)
 	time.Sleep(time.Millisecond)
 	if len(d.subscribers) != 0 {
