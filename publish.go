@@ -118,6 +118,10 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		}
 	}()
 
+	if options.ConfirmMode {
+		publisher.NotifyPublish(func(_ Confirmation) {})
+	}
+
 	return publisher, nil
 }
 
@@ -202,6 +206,10 @@ func (publisher *Publisher) PublishWithContext(
 	return nil
 }
 
+// PublishWithContext publishes the provided data to the given routing keys over the connection.
+// if the publisher is in confirm mode (which can be either done by calling `NotifyPublish` with a custom handler
+// or by using `WithPublisherOptionsConfirm`) a publisher confirmation is returned.
+// This confirmation can be used to check if the message was actually published or wait for this to happen.
 func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 	ctx context.Context,
 	data []byte,
