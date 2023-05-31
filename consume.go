@@ -94,8 +94,8 @@ func NewConsumer(
 				*options,
 			)
 			if err != nil {
-				consumer.options.Logger.Fatalf("error restarting consumer goroutines after cancel or close: %v", err)
-				consumer.options.Logger.Fatalf("consumer closing, unable to recover")
+				consumer.options.Logger.Errorf("error restarting consumer goroutines after cancel or close: %v", err)
+				consumer.options.Logger.Errorf("consumer closing, unable to recover")
 				return
 			}
 		}

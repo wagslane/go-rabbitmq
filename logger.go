@@ -15,11 +15,6 @@ const loggingPrefix = "gorabbit"
 
 type stdDebugLogger struct{}
 
-// Fatalf -
-func (l stdDebugLogger) Fatalf(format string, v ...interface{}) {
-	log.Printf(fmt.Sprintf("%s FATAL: %s", loggingPrefix, format), v...)
-}
-
 // Errorf -
 func (l stdDebugLogger) Errorf(format string, v ...interface{}) {
 	log.Printf(fmt.Sprintf("%s ERROR: %s", loggingPrefix, format), v...)

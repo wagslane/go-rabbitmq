@@ -109,8 +109,8 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 			publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
 			err := publisher.startup()
 			if err != nil {
-				publisher.options.Logger.Fatalf("error on startup for publisher after cancel or close: %v", err)
-				publisher.options.Logger.Fatalf("publisher closing, unable to recover")
+				publisher.options.Logger.Errorf("error on startup for publisher after cancel or close: %v", err)
+				publisher.options.Logger.Errorf("publisher closing, unable to recover")
 				return
 			}
 			go publisher.startReturnHandler()
