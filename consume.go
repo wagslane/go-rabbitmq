@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
+	"github.com/xmapst/go-rabbitmq/internal/channelmanager"
 )
 
 // Action is an action that occurs after processed this delivery

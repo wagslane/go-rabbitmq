@@ -4,16 +4,12 @@ import (
 	"context"
 	"log"
 
-	rabbitmq "github.com/wagslane/go-rabbitmq"
+	rabbitmq "github.com/xmapst/go-rabbitmq"
 )
 
 // errorLogger is used in WithPublisherOptionsLogger to create a custom logger
 // that only logs ERROR and FATAL log levels
 type errorLogger struct{}
-
-func (l errorLogger) Fatalf(format string, v ...interface{}) {
-	log.Printf("mylogger: "+format, v...)
-}
 
 func (l errorLogger) Errorf(format string, v ...interface{}) {
 	log.Printf("mylogger: "+format, v...)

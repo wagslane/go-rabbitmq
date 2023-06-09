@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
-	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"github.com/xmapst/go-rabbitmq/internal/channelmanager"
+	"github.com/xmapst/go-rabbitmq/internal/connectionmanager"
 )
 
 // DeliveryMode. Transient means higher throughput but messages will not be
