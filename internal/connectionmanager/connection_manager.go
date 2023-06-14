@@ -24,10 +24,11 @@ type ConnectionManager struct {
 
 // NewConnectionManager creates a new connection manager
 func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
-	conn, err := amqp.DialConfig(url, amqp.Config(conf))
+	conn, err := amqp.DialConfig(url, conf)
 	if err != nil {
 		return nil, err
 	}
+
 	connManager := ConnectionManager{
 		logger:               log,
 		url:                  url,
@@ -39,21 +40,20 @@ func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, recon
 		reconnectionCountMux: &sync.Mutex{},
 		dispatcher:           dispatcher.NewDispatcher(),
 	}
+
 	go connManager.startNotifyClose()
+
 	return &connManager, nil
 }
 
 // Close safely closes the current channel and connection
 func (connManager *ConnectionManager) Close() error {
 	connManager.logger.Infof("closing connection manager...")
+
 	connManager.connectionMux.Lock()
 	defer connManager.connectionMux.Unlock()
 
-	err := connManager.connection.Close()
-	if err != nil {
-		return err
-	}
-	return nil
+	return connManager.connection.Close()
 }
 
 // NotifyReconnect adds a new subscriber that will receive error messages whenever
@@ -84,11 +84,11 @@ func (connManager *ConnectionManager) startNotifyClose() {
 
 	if err != nil {
 		connManager.logger.Errorf("attempting to reconnect to amqp server after connection close with error: %v", err)
-		connManager.dispatcher.DispathLooseConnection(err)
+		connManager.dispatcher.DispatchLooseConnection(err)
 		connManager.reconnectLoop()
 		connManager.logger.Warnf("successfully reconnected to amqp server")
 		connManager.dispatcher.Dispatch(err)
-		connManager.dispatcher.DispathLooseConnection(nil)
+		connManager.dispatcher.DispatchLooseConnection(nil)
 	}
 
 	if err == nil {
@@ -100,12 +100,14 @@ func (connManager *ConnectionManager) startNotifyClose() {
 func (connManager *ConnectionManager) GetReconnectionCount() uint {
 	connManager.reconnectionCountMux.Lock()
 	defer connManager.reconnectionCountMux.Unlock()
+
 	return connManager.reconnectionCount
 }
 
 func (connManager *ConnectionManager) incrementReconnectionCount() {
 	connManager.reconnectionCountMux.Lock()
 	defer connManager.reconnectionCountMux.Unlock()
+
 	connManager.reconnectionCount++
 }
 
@@ -113,7 +115,9 @@ func (connManager *ConnectionManager) incrementReconnectionCount() {
 func (connManager *ConnectionManager) reconnectLoop() {
 	for {
 		connManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", connManager.ReconnectInterval)
+
 		time.Sleep(connManager.ReconnectInterval)
+
 		err := connManager.reconnect()
 
 		if err != nil {
@@ -132,7 +136,8 @@ func (connManager *ConnectionManager) reconnectLoop() {
 func (connManager *ConnectionManager) reconnect() error {
 	connManager.connectionMux.Lock()
 	defer connManager.connectionMux.Unlock()
-	newConn, err := amqp.DialConfig(connManager.url, amqp.Config(connManager.amqpConfig))
+
+	newConn, err := amqp.DialConfig(connManager.url, connManager.amqpConfig)
 
 	if err != nil {
 		return err

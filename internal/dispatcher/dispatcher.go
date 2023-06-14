@@ -45,8 +45,8 @@ func (d *Dispatcher) Dispatch(err error) error {
 	return nil
 }
 
-// DispathLooseConnection dispatching that connection to RabbitMQ is loosed
-func (d *Dispatcher) DispathLooseConnection(err error) error {
+// DispatchLooseConnection dispatching that connection to RabbitMQ is loosed
+func (d *Dispatcher) DispatchLooseConnection(err error) error {
 	d.subscribersMux.Lock()
 	defer d.subscribersMux.Unlock()
 
@@ -79,12 +79,16 @@ func (d *Dispatcher) AddSubscriber() (<-chan error, chan<- struct{}, <-chan erro
 
 	go func(id int) {
 		<-closeCh
+
 		d.subscribersMux.Lock()
 		defer d.subscribersMux.Unlock()
+
 		sub, ok := d.subscribers[id]
+
 		if !ok {
 			return
 		}
+
 		close(sub.notifyCancelOrCloseChan)
 		delete(d.subscribers, id)
 	}(id)

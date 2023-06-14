@@ -31,6 +31,7 @@ type Consumer struct {
 	chanManager                *channelmanager.ChannelManager
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
+	notifyClosedChan           <-chan error
 	options                    ConsumerOptions
 
 	isClosedMux *sync.RWMutex
@@ -67,12 +68,13 @@ func NewConsumer(
 	if err != nil {
 		return nil, err
 	}
-	reconnectErrCh, closeCh, _ := chanManager.NotifyReconnect()
+	reconnectErrCh, closeCh, notifyClosedChan := chanManager.NotifyReconnect()
 
 	consumer := &Consumer{
 		chanManager:                chanManager,
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
+		notifyClosedChan:           notifyClosedChan,
 		options:                    *options,
 		isClosedMux:                &sync.RWMutex{},
 		isClosed:                   false,
@@ -82,6 +84,7 @@ func NewConsumer(
 		handler,
 		*options,
 	)
+
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +92,16 @@ func NewConsumer(
 	go func() {
 		for err := range consumer.reconnectErrCh {
 			consumer.options.Logger.Infof("successful consumer recovery from: %v", err)
+
 			err = consumer.startGoroutines(
 				handler,
 				*options,
 			)
+
 			if err != nil {
 				consumer.options.Logger.Fatalf("error restarting consumer goroutines after cancel or close: %v", err)
 				consumer.options.Logger.Fatalf("consumer closing, unable to recover")
+
 				return
 			}
 		}
@@ -111,18 +117,18 @@ func NewConsumer(
 func (consumer *Consumer) Close() {
 	consumer.isClosedMux.Lock()
 	defer consumer.isClosedMux.Unlock()
+
 	consumer.isClosed = true
+
 	// close the channel so that rabbitmq server knows that the
 	// consumer has been stopped.
-	err := consumer.chanManager.Close()
-	if err != nil {
+	if err := consumer.chanManager.Close(); err != nil {
 		consumer.options.Logger.Warnf("error while closing the channel: %v", err)
 	}
 
 	consumer.options.Logger.Infof("closing consumer...")
-	go func() {
-		consumer.closeConnectionToManagerCh <- struct{}{}
-	}()
+
+	close(consumer.closeConnectionToManagerCh)
 }
 
 // startGoroutines declares the queue if it doesn't exist,
@@ -137,19 +143,20 @@ func (consumer *Consumer) startGoroutines(
 		0,
 		options.QOSGlobal,
 	)
+
 	if err != nil {
 		return fmt.Errorf("declare qos failed: %w", err)
 	}
-	err = declareExchange(consumer.chanManager, options.ExchangeOptions)
-	if err != nil {
+
+	if err = declareExchange(consumer.chanManager, options.ExchangeOptions); err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
-	err = declareQueue(consumer.chanManager, options.QueueOptions)
-	if err != nil {
+
+	if err = declareQueue(consumer.chanManager, options.QueueOptions); err != nil {
 		return fmt.Errorf("declare queue failed: %w", err)
 	}
-	err = declareBindings(consumer.chanManager, options)
-	if err != nil {
+
+	if err = declareBindings(consumer.chanManager, options); err != nil {
 		return fmt.Errorf("declare bindings failed: %w", err)
 	}
 
@@ -162,6 +169,7 @@ func (consumer *Consumer) startGoroutines(
 		options.RabbitConsumerOptions.NoWait,
 		tableToAMQPTable(options.RabbitConsumerOptions.Args),
 	)
+
 	if err != nil {
 		return err
 	}
@@ -169,13 +177,16 @@ func (consumer *Consumer) startGoroutines(
 	for i := 0; i < options.Concurrency; i++ {
 		go handlerGoroutine(consumer, msgs, options, handler)
 	}
+
 	consumer.options.Logger.Infof("Processing messages on %v goroutines", options.Concurrency)
+
 	return nil
 }
 
 func (consumer *Consumer) getIsClosed() bool {
 	consumer.isClosedMux.RLock()
 	defer consumer.isClosedMux.RUnlock()
+
 	return consumer.isClosed
 }
 
@@ -208,5 +219,6 @@ func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOpti
 			}
 		}
 	}
+
 	consumer.options.Logger.Infof("rabbit consumer goroutine closed")
 }

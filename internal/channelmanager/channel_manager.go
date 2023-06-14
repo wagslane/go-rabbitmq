@@ -73,6 +73,7 @@ func (chanManager *ChannelManager) startNotifyCancelOrClosed() {
 			chanManager.reconnectLoop()
 			chanManager.logger.Warnf("successfully reconnected to amqp server")
 			chanManager.dispatcher.Dispatch(err)
+			chanManager.dispatcher.DispatchLooseConnection(err)
 		}
 
 		if err == nil {
@@ -83,6 +84,7 @@ func (chanManager *ChannelManager) startNotifyCancelOrClosed() {
 		chanManager.reconnectLoop()
 		chanManager.logger.Warnf("successfully reconnected to amqp server after cancel")
 		chanManager.dispatcher.Dispatch(errors.New(err))
+		chanManager.dispatcher.DispatchLooseConnection(errors.New(err))
 	}
 }
 
@@ -90,12 +92,14 @@ func (chanManager *ChannelManager) startNotifyCancelOrClosed() {
 func (chanManager *ChannelManager) GetReconnectionCount() uint {
 	chanManager.reconnectionCountMux.Lock()
 	defer chanManager.reconnectionCountMux.Unlock()
+
 	return chanManager.reconnectionCount
 }
 
 func (chanManager *ChannelManager) incrementReconnectionCount() {
 	chanManager.reconnectionCountMux.Lock()
 	defer chanManager.reconnectionCountMux.Unlock()
+
 	chanManager.reconnectionCount++
 }
 
@@ -103,13 +107,18 @@ func (chanManager *ChannelManager) incrementReconnectionCount() {
 func (chanManager *ChannelManager) reconnectLoop() {
 	for {
 		chanManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", chanManager.reconnectInterval)
+
 		time.Sleep(chanManager.reconnectInterval)
+
 		err := chanManager.reconnect()
+
 		if err != nil {
 			chanManager.logger.Errorf("error reconnecting to amqp server: %v", err)
 		} else {
 			chanManager.incrementReconnectionCount()
+
 			go chanManager.startNotifyCancelOrClosed()
+
 			return
 		}
 	}
@@ -119,7 +128,9 @@ func (chanManager *ChannelManager) reconnectLoop() {
 func (chanManager *ChannelManager) reconnect() error {
 	chanManager.channelMux.Lock()
 	defer chanManager.channelMux.Unlock()
+
 	newChannel, err := getNewChannel(chanManager.connManager)
+
 	if err != nil {
 		return err
 	}
@@ -129,21 +140,18 @@ func (chanManager *ChannelManager) reconnect() error {
 	}
 
 	chanManager.channel = newChannel
+
 	return nil
 }
 
 // Close safely closes the current channel and connection
 func (chanManager *ChannelManager) Close() error {
 	chanManager.logger.Infof("closing channel manager...")
+
 	chanManager.channelMux.Lock()
 	defer chanManager.channelMux.Unlock()
 
-	err := chanManager.channel.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return chanManager.channel.Close()
 }
 
 // NotifyReconnect adds a new subscriber that will receive error messages whenever
