@@ -203,8 +203,8 @@ func (chanManager *ChannelManager) NotifyReturnSafe(
 func (chanManager *ChannelManager) ConfirmSafe(
 	noWait bool,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMux.Lock()
+	defer chanManager.channelMux.Unlock()
 
 	return chanManager.channel.Confirm(
 		noWait,
