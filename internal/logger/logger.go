@@ -8,5 +8,4 @@ type Logger interface {
 	Warnf(string, ...interface{})
 	Infof(string, ...interface{})
 	Debugf(string, ...interface{})
-	Tracef(string, ...interface{})
 }
