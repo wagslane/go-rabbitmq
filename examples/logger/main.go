@@ -28,8 +28,6 @@ func (l errorLogger) Infof(format string, v ...interface{}) {
 func (l errorLogger) Debugf(format string, v ...interface{}) {
 }
 
-func (l errorLogger) Tracef(format string, v ...interface{}) {}
-
 func main() {
 	mylogger := &errorLogger{}
 
