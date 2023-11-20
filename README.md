@@ -44,11 +44,6 @@ defer conn.Close()
 
 consumer, err := rabbitmq.NewConsumer(
 	conn,
-	func(d rabbitmq.Delivery) rabbitmq.Action {
-		log.Printf("consumed: %v", string(d.Body))
-		// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
-		return rabbitmq.Ack
-	},
 	"my_queue",
 	rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key"),
 	rabbitmq.WithConsumerOptionsExchangeName("events"),
@@ -58,6 +53,15 @@ if err != nil {
 	log.Fatal(err)
 }
 defer consumer.Close()
+
+err = consumer.Run(func(d rabbitmq.Delivery) rabbitmq.Action {
+	log.Printf("consumed: %v", string(d.Body))
+	// rabbitmq.Ack, rabbitmq.NackDiscard, rabbitmq.NackRequeue
+	return rabbitmq.Ack
+})
+if err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## 🚀 Quick Start Publisher
