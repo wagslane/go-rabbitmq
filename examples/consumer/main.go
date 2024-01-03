@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -35,7 +36,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer consumer.Close()
+	defer func() {
+		consumer.Close()
+
+		// We can optionally wait for any long-running handlers to finish cleanly and avoid stopping the process
+		// while handlers are still closing files or performing actions that are vulnerable to corruption.
+		_ = consumer.WaitForHandlers(context.Background())
+	}()
 
 	// block main thread - wait for shutdown signal
 	sigs := make(chan os.Signal, 1)
