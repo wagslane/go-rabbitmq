@@ -128,7 +128,16 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 }
 
 func (publisher *Publisher) startup() error {
-	err := declareExchange(publisher.chanManager, publisher.options.ExchangeOptions)
+	err := declareAll(publisher.chanManager, declareOptions{
+		Queues:    publisher.options.Queues,
+		Exchanges: publisher.options.Exchanges,
+		Bindings:  publisher.options.Bindings,
+	})
+
+	if err != nil {
+		return err
+	}
+
 	if err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
@@ -167,7 +176,9 @@ func (publisher *Publisher) PublishWithContext(
 		return fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
-	options := &PublishOptions{}
+	options := &PublishOptions{
+		Exchange: publisher.options.ExchangeName,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -231,7 +242,9 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
-	options := &PublishOptions{}
+	options := &PublishOptions{
+		Exchange: publisher.options.ExchangeName,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}

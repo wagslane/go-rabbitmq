@@ -140,21 +140,19 @@ func (consumer *Consumer) startGoroutines(
 	if err != nil {
 		return fmt.Errorf("declare qos failed: %w", err)
 	}
-	err = declareExchange(consumer.chanManager, options.ExchangeOptions)
+
+	err = declareAll(consumer.chanManager, declareOptions{
+		Queues:    options.Queues,
+		Exchanges: options.Exchanges,
+		Bindings:  options.Bindings,
+	})
+
 	if err != nil {
-		return fmt.Errorf("declare exchange failed: %w", err)
-	}
-	err = declareQueue(consumer.chanManager, options.QueueOptions)
-	if err != nil {
-		return fmt.Errorf("declare queue failed: %w", err)
-	}
-	err = declareBindings(consumer.chanManager, options)
-	if err != nil {
-		return fmt.Errorf("declare bindings failed: %w", err)
+		return err
 	}
 
 	msgs, err := consumer.chanManager.ConsumeSafe(
-		options.QueueOptions.Name,
+		options.QueueName,
 		options.RabbitConsumerOptions.Name,
 		options.RabbitConsumerOptions.AutoAck,
 		options.RabbitConsumerOptions.Exclusive,
