@@ -5,24 +5,31 @@ import amqp "github.com/rabbitmq/amqp091-go"
 // PublisherOptions are used to describe a publisher's configuration.
 // Logger is a custom logging interface.
 type PublisherOptions struct {
-	ExchangeOptions ExchangeOptions
-	Logger          Logger
-	ConfirmMode     bool
+	ExchangeName string
+	Logger       Logger
+	ConfirmMode  bool
+
+	// Declare these queues, exchanges, and bindings before publishing
+	Queues    []QueueOptions
+	Exchanges []ExchangeOptions
+	Bindings  []Binding
 }
 
 // getDefaultPublisherOptions describes the options that will be used when a value isn't provided
 func getDefaultPublisherOptions() PublisherOptions {
 	return PublisherOptions{
-		ExchangeOptions: ExchangeOptions{
-			Name:       "",
-			Kind:       amqp.ExchangeDirect,
-			Durable:    false,
-			AutoDelete: false,
-			Internal:   false,
-			NoWait:     false,
-			Passive:    false,
-			Args:       Table{},
-			Declare:    false,
+		Exchanges: []ExchangeOptions{
+			{
+				Name:       "",
+				Kind:       amqp.ExchangeDirect,
+				Durable:    false,
+				AutoDelete: false,
+				Internal:   false,
+				NoWait:     false,
+				Passive:    false,
+				Args:       Table{},
+				Declare:    false,
+			},
 		},
 		Logger:      stdDebugLogger{},
 		ConfirmMode: false,
@@ -46,51 +53,59 @@ func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
 // WithPublisherOptionsExchangeName sets the exchange name
 func WithPublisherOptionsExchangeName(name string) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
-		options.ExchangeOptions.Name = name
+		if options.Exchanges[0].Name == "" {
+			options.Exchanges[0].Name = name
+		}
+		options.ExchangeName = name
+	}
+}
+func WithPublisherOptionsConfirmMode(confirm bool) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.ConfirmMode = confirm
 	}
 }
 
 // WithPublisherOptionsExchangeKind ensures the queue is a durable queue
 func WithPublisherOptionsExchangeKind(kind string) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
-		options.ExchangeOptions.Kind = kind
+		options.Exchanges[0].Kind = kind
 	}
 }
 
 // WithPublisherOptionsExchangeDurable ensures the exchange is a durable exchange
 func WithPublisherOptionsExchangeDurable(options *PublisherOptions) {
-	options.ExchangeOptions.Durable = true
+	options.Exchanges[0].Durable = true
 }
 
 // WithPublisherOptionsExchangeAutoDelete ensures the exchange is an auto-delete exchange
 func WithPublisherOptionsExchangeAutoDelete(options *PublisherOptions) {
-	options.ExchangeOptions.AutoDelete = true
+	options.Exchanges[0].AutoDelete = true
 }
 
 // WithPublisherOptionsExchangeInternal ensures the exchange is an internal exchange
 func WithPublisherOptionsExchangeInternal(options *PublisherOptions) {
-	options.ExchangeOptions.Internal = true
+	options.Exchanges[0].Internal = true
 }
 
 // WithPublisherOptionsExchangeNoWait ensures the exchange is a no-wait exchange
 func WithPublisherOptionsExchangeNoWait(options *PublisherOptions) {
-	options.ExchangeOptions.NoWait = true
+	options.Exchanges[0].NoWait = true
 }
 
 // WithPublisherOptionsExchangeDeclare stops this library from declaring the exchanges existance
 func WithPublisherOptionsExchangeDeclare(options *PublisherOptions) {
-	options.ExchangeOptions.Declare = true
+	options.Exchanges[0].Declare = true
 }
 
 // WithPublisherOptionsExchangePassive ensures the exchange is a passive exchange
 func WithPublisherOptionsExchangePassive(options *PublisherOptions) {
-	options.ExchangeOptions.Passive = true
+	options.Exchanges[0].Passive = true
 }
 
 // WithPublisherOptionsExchangeArgs adds optional args to the exchange
 func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
-		options.ExchangeOptions.Args = args
+		options.Exchanges[0].Args = args
 	}
 }
 
@@ -98,4 +113,28 @@ func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 // this is required if publisher confirmations should be used
 func WithPublisherOptionsConfirm(options *PublisherOptions) {
 	options.ConfirmMode = true
+}
+
+func WithPublisherQueues(queues []QueueOptions) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Queues = queues
+	}
+}
+
+func WithPublisherBindings(bindings []Binding) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Bindings = bindings
+	}
+}
+
+func WithPublisherExchange(exchange ExchangeOptions) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Exchanges = []ExchangeOptions{exchange}
+	}
+}
+
+func WithPublisherExchanges(exchanges []ExchangeOptions) func(options *PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.Exchanges = exchanges
+	}
 }

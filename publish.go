@@ -69,9 +69,9 @@ type PublisherConfirmation []*amqp.DeferredConfirmation
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
 	defaultOptions := getDefaultPublisherOptions()
-	options := &defaultOptions
+	options := defaultOptions
 	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
+		optionFunc(&options)
 	}
 
 	if conn.connectionManager == nil {
@@ -96,7 +96,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		handlerMux:                    &sync.Mutex{},
 		notifyReturnHandler:           nil,
 		notifyPublishHandler:          nil,
-		options:                       *options,
+		options:                       options,
 	}
 
 	err = publisher.startup()
@@ -128,7 +128,16 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 }
 
 func (publisher *Publisher) startup() error {
-	err := declareExchange(publisher.chanManager, publisher.options.ExchangeOptions)
+	err := declareAll(publisher.chanManager, declareOptions{
+		Queues:    publisher.options.Queues,
+		Exchanges: publisher.options.Exchanges,
+		Bindings:  publisher.options.Bindings,
+	})
+
+	if err != nil {
+		return err
+	}
+
 	if err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
@@ -167,7 +176,9 @@ func (publisher *Publisher) PublishWithContext(
 		return fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
-	options := &PublishOptions{}
+	options := &PublishOptions{
+		Exchange: publisher.options.ExchangeName,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
@@ -231,7 +242,9 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
-	options := &PublishOptions{}
+	options := &PublishOptions{
+		Exchange: publisher.options.ExchangeName,
+	}
 	for _, optionFunc := range optionFuncs {
 		optionFunc(options)
 	}
