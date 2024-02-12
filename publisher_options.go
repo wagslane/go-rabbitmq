@@ -59,6 +59,11 @@ func WithPublisherOptionsExchangeName(name string) func(*PublisherOptions) {
 		options.ExchangeName = name
 	}
 }
+func WithPublisherOptionsConfirmMode(confirm bool) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.ConfirmMode = confirm
+	}
+}
 
 // WithPublisherOptionsExchangeKind ensures the queue is a durable queue
 func WithPublisherOptionsExchangeKind(kind string) func(*PublisherOptions) {

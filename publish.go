@@ -69,9 +69,9 @@ type PublisherConfirmation []*amqp.DeferredConfirmation
 // will fail with an error when the server is requesting a slowdown
 func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publisher, error) {
 	defaultOptions := getDefaultPublisherOptions()
-	options := &defaultOptions
+	options := defaultOptions
 	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
+		optionFunc(&options)
 	}
 
 	if conn.connectionManager == nil {
@@ -96,7 +96,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		handlerMux:                    &sync.Mutex{},
 		notifyReturnHandler:           nil,
 		notifyPublishHandler:          nil,
-		options:                       *options,
+		options:                       options,
 	}
 
 	err = publisher.startup()
