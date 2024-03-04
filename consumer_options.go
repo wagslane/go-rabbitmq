@@ -26,22 +26,26 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 			Args:       Table{},
 			Declare:    true,
 		},
-		ExchangeOptions: ExchangeOptions{
-			Name:       "",
-			Kind:       amqp.ExchangeDirect,
-			Durable:    false,
-			AutoDelete: false,
-			Internal:   false,
-			NoWait:     false,
-			Passive:    false,
-			Args:       Table{},
-			Declare:    false,
-		},
-		Bindings:    []Binding{},
-		Concurrency: 1,
-		Logger:      stdDebugLogger{},
-		QOSPrefetch: 10,
-		QOSGlobal:   false,
+		ExchangeOptions: []ExchangeOptions{},
+		Concurrency:     1,
+		Logger:          stdDebugLogger{},
+		QOSPrefetch:     10,
+		QOSGlobal:       false,
+	}
+}
+
+func getDefaultExchangeOptions() ExchangeOptions {
+	return ExchangeOptions{
+		Name:       "",
+		Kind:       amqp.ExchangeDirect,
+		Durable:    false,
+		AutoDelete: false,
+		Internal:   false,
+		NoWait:     false,
+		Passive:    false,
+		Args:       Table{},
+		Declare:    false,
+		Bindings:   []Binding{},
 	}
 }
 
@@ -60,8 +64,7 @@ func getDefaultBindingOptions() BindingOptions {
 type ConsumerOptions struct {
 	RabbitConsumerOptions RabbitConsumerOptions
 	QueueOptions          QueueOptions
-	ExchangeOptions       ExchangeOptions
-	Bindings              []Binding
+	ExchangeOptions       []ExchangeOptions
 	Concurrency           int
 	Logger                logger.Logger
 	QOSPrefetch           int
@@ -144,61 +147,77 @@ func WithConsumerOptionsQueueArgs(args Table) func(*ConsumerOptions) {
 	}
 }
 
+func ensureExchangeOptions(options *ConsumerOptions) {
+	if len(options.ExchangeOptions) == 0 {
+		options.ExchangeOptions = append(options.ExchangeOptions, getDefaultExchangeOptions())
+	}
+}
+
 // WithConsumerOptionsExchangeName sets the exchange name
 func WithConsumerOptionsExchangeName(name string) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.ExchangeOptions.Name = name
+		ensureExchangeOptions(options)
+		options.ExchangeOptions[0].Name = name
 	}
 }
 
 // WithConsumerOptionsExchangeKind ensures the queue is a durable queue
 func WithConsumerOptionsExchangeKind(kind string) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.ExchangeOptions.Kind = kind
+		ensureExchangeOptions(options)
+		options.ExchangeOptions[0].Kind = kind
 	}
 }
 
 // WithConsumerOptionsExchangeDurable ensures the exchange is a durable exchange
 func WithConsumerOptionsExchangeDurable(options *ConsumerOptions) {
-	options.ExchangeOptions.Durable = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].Durable = true
 }
 
 // WithConsumerOptionsExchangeAutoDelete ensures the exchange is an auto-delete exchange
 func WithConsumerOptionsExchangeAutoDelete(options *ConsumerOptions) {
-	options.ExchangeOptions.AutoDelete = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].AutoDelete = true
 }
 
 // WithConsumerOptionsExchangeInternal ensures the exchange is an internal exchange
 func WithConsumerOptionsExchangeInternal(options *ConsumerOptions) {
-	options.ExchangeOptions.Internal = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].Internal = true
 }
 
 // WithConsumerOptionsExchangeNoWait ensures the exchange is a no-wait exchange
 func WithConsumerOptionsExchangeNoWait(options *ConsumerOptions) {
-	options.ExchangeOptions.NoWait = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].NoWait = true
 }
 
 // WithConsumerOptionsExchangeDeclare stops this library from declaring the exchanges existance
 func WithConsumerOptionsExchangeDeclare(options *ConsumerOptions) {
-	options.ExchangeOptions.Declare = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].Declare = true
 }
 
 // WithConsumerOptionsExchangePassive ensures the exchange is a passive exchange
 func WithConsumerOptionsExchangePassive(options *ConsumerOptions) {
-	options.ExchangeOptions.Passive = true
+	ensureExchangeOptions(options)
+	options.ExchangeOptions[0].Passive = true
 }
 
 // WithConsumerOptionsExchangeArgs adds optional args to the exchange
 func WithConsumerOptionsExchangeArgs(args Table) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.ExchangeOptions.Args = args
+		ensureExchangeOptions(options)
+		options.ExchangeOptions[0].Args = args
 	}
 }
 
 // WithConsumerOptionsRoutingKey binds the queue to a routing key with the default binding options
 func WithConsumerOptionsRoutingKey(routingKey string) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.Bindings = append(options.Bindings, Binding{
+		ensureExchangeOptions(options)
+		options.ExchangeOptions[0].Bindings = append(options.ExchangeOptions[0].Bindings, Binding{
 			RoutingKey:     routingKey,
 			BindingOptions: getDefaultBindingOptions(),
 		})
@@ -210,7 +229,16 @@ func WithConsumerOptionsRoutingKey(routingKey string) func(*ConsumerOptions) {
 // the zero value. If you want to declare your bindings for example, be sure to set Declare=true
 func WithConsumerOptionsBinding(binding Binding) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.Bindings = append(options.Bindings, binding)
+		ensureExchangeOptions(options)
+		options.ExchangeOptions[0].Bindings = append(options.ExchangeOptions[0].Bindings, binding)
+	}
+}
+
+// WithConsumerOptionsExchangeOptions adds a new exchange to the consumer, this should probably only be
+// used if you want to to consume from multiple exchanges on the same consumer
+func WithConsumerOptionsExchangeOptions(exchangeOptions ExchangeOptions) func(*ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		options.ExchangeOptions = append(options.ExchangeOptions, exchangeOptions)
 	}
 }
 

@@ -13,4 +13,5 @@ type ExchangeOptions struct {
 	Passive    bool // if false, a missing exchange will be created on the server
 	Args       Table
 	Declare    bool
+	Bindings   []Binding
 }

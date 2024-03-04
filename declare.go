@@ -71,19 +71,21 @@ func declareExchange(chanManager *channelmanager.ChannelManager, options Exchang
 }
 
 func declareBindings(chanManager *channelmanager.ChannelManager, options ConsumerOptions) error {
-	for _, binding := range options.Bindings {
-		if !binding.Declare {
-			continue
-		}
-		err := chanManager.QueueBindSafe(
-			options.QueueOptions.Name,
-			binding.RoutingKey,
-			options.ExchangeOptions.Name,
-			binding.NoWait,
-			tableToAMQPTable(binding.Args),
-		)
-		if err != nil {
-			return err
+	for _, exchangeOption := range options.ExchangeOptions {
+		for _, binding := range exchangeOption.Bindings {
+			if !binding.Declare {
+				continue
+			}
+			err := chanManager.QueueBindSafe(
+				options.QueueOptions.Name,
+				binding.RoutingKey,
+				exchangeOption.Name,
+				binding.NoWait,
+				tableToAMQPTable(binding.Args),
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
