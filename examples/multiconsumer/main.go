@@ -33,6 +33,7 @@ func main() {
 		rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key"),
 		rabbitmq.WithConsumerOptionsRoutingKey("my_routing_key_2"),
 		rabbitmq.WithConsumerOptionsExchangeName("events"),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
 	)
 	if err != nil {
 		log.Fatal(err)
