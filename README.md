@@ -1,6 +1,6 @@
 # go-rabbitmq
 
-Wrapper of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
+A wrapper of [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) that provides reconnection logic and sane defaults. Hit the project with a star if you find it useful ⭐
 
 Supported by [Boot.dev](https://boot.dev)
 
@@ -107,7 +107,7 @@ See the [examples](examples) directory for more ideas.
 
 * By default, queues are declared if they didn't already exist by new consumers
 * By default, routing-key bindings are declared by consumers if you're using `WithConsumerOptionsRoutingKey`
-* By default, exchanges are *not* declared by publishers or consumers if they didn't already exist, hence `WithPublisherOptionsExchangeDeclare` and `WithConsumerOptionsExchangeDeclare`.
+* By default, exchanges are *not* declared by publishers or consumers if they don't already exist, hence `WithPublisherOptionsExchangeDeclare` and `WithConsumerOptionsExchangeDeclare`.
 
 Read up on all the options in the GoDoc, there are quite a few of them. I try to pick sane and simple defaults.
 

@@ -139,9 +139,11 @@ func (consumer *Consumer) startGoroutines(
 	if err != nil {
 		return fmt.Errorf("declare qos failed: %w", err)
 	}
-	err = declareExchange(consumer.chanManager, options.ExchangeOptions)
-	if err != nil {
-		return fmt.Errorf("declare exchange failed: %w", err)
+	for _, exchangeOption := range options.ExchangeOptions {
+		err = declareExchange(consumer.chanManager, exchangeOption)
+		if err != nil {
+			return fmt.Errorf("declare exchange failed: %w", err)
+		}
 	}
 	err = declareQueue(consumer.chanManager, options.QueueOptions)
 	if err != nil {

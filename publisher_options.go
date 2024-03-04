@@ -77,7 +77,7 @@ func WithPublisherOptionsExchangeNoWait(options *PublisherOptions) {
 	options.ExchangeOptions.NoWait = true
 }
 
-// WithPublisherOptionsExchangeDeclare stops this library from declaring the exchanges existance
+// WithPublisherOptionsExchangeDeclare will create the exchange if it doesn't exist
 func WithPublisherOptionsExchangeDeclare(options *PublisherOptions) {
 	options.ExchangeOptions.Declare = true
 }
