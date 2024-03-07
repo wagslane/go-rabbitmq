@@ -38,7 +38,7 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 		reconnectInterval:    reconnectInterval,
 		reconnectionCount:    0,
 		reconnectionCountMux: &sync.Mutex{},
-		dispatcher:           dispatcher.NewDispatcher(),
+		dispatcher:           dispatcher.NewDispatcher(log),
 	}
 	go chanManager.startNotifyCancelOrClosed()
 	return &chanManager, nil
