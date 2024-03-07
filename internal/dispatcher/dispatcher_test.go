@@ -5,8 +5,16 @@ import (
 	"time"
 )
 
+type lgr struct{}
+
+func (l *lgr) Fatalf(string, ...interface{}) {}
+func (l *lgr) Errorf(string, ...interface{}) {}
+func (l *lgr) Warnf(string, ...interface{})  {}
+func (l *lgr) Infof(string, ...interface{})  {}
+func (l *lgr) Debugf(string, ...interface{}) {}
+
 func TestNewDispatcher(t *testing.T) {
-	d := NewDispatcher()
+	d := NewDispatcher(&lgr{})
 	if d.subscribers == nil {
 		t.Error("Dispatcher subscribers is nil")
 	}
@@ -16,7 +24,7 @@ func TestNewDispatcher(t *testing.T) {
 }
 
 func TestAddSubscriber(t *testing.T) {
-	d := NewDispatcher()
+	d := NewDispatcher(&lgr{})
 	d.AddSubscriber()
 	if len(d.subscribers) != 1 {
 		t.Error("Dispatcher subscribers length is not 1")
@@ -24,7 +32,7 @@ func TestAddSubscriber(t *testing.T) {
 }
 
 func TestCloseSubscriber(t *testing.T) {
-	d := NewDispatcher()
+	d := NewDispatcher(&lgr{})
 	_, closeCh := d.AddSubscriber()
 	close(closeCh)
 	time.Sleep(time.Millisecond)

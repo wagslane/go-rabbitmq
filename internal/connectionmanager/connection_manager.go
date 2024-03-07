@@ -37,7 +37,7 @@ func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, recon
 		ReconnectInterval:    reconnectInterval,
 		reconnectionCount:    0,
 		reconnectionCountMux: &sync.Mutex{},
-		dispatcher:           dispatcher.NewDispatcher(),
+		dispatcher:           dispatcher.NewDispatcher(log),
 	}
 	go connManager.startNotifyClose()
 	return &connManager, nil
