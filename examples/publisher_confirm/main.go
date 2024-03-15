@@ -13,10 +13,7 @@ import (
 )
 
 func main() {
-	conn, err := rabbitmq.NewConn(
-		"amqp://guest:guest@localhost",
-		rabbitmq.WithConnectionOptionsLogging,
-	)
+	conn, err := rabbitmq.NewConn("amqp://guest:guest@localhost")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -24,7 +21,6 @@ func main() {
 
 	publisher, err := rabbitmq.NewPublisher(
 		conn,
-		rabbitmq.WithPublisherOptionsLogging,
 		rabbitmq.WithPublisherOptionsExchangeName("events"),
 		rabbitmq.WithPublisherOptionsExchangeDeclare,
 		rabbitmq.WithPublisherOptionsConfirm,

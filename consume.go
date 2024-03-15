@@ -60,7 +60,7 @@ func NewConsumer(
 		return nil, errors.New("connection manager can't be nil")
 	}
 
-	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, conn.connectionManager.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,6 @@ func (consumer *Consumer) Run(handler Handler) error {
 	}
 
 	for err := range consumer.reconnectErrCh {
-		consumer.options.Logger.Infof("successful consumer recovery from: %v", err)
 		err = consumer.startGoroutines(
 			handler,
 			consumer.options,
@@ -113,12 +112,8 @@ func (consumer *Consumer) Close() {
 	consumer.isClosed = true
 	// close the channel so that rabbitmq server knows that the
 	// consumer has been stopped.
-	err := consumer.chanManager.Close()
-	if err != nil {
-		consumer.options.Logger.Warnf("error while closing the channel: %v", err)
-	}
+	consumer.chanManager.Close()
 
-	consumer.options.Logger.Infof("closing consumer...")
 	go func() {
 		consumer.closeConnectionToManagerCh <- struct{}{}
 	}()
@@ -170,7 +165,6 @@ func (consumer *Consumer) startGoroutines(
 	for i := 0; i < options.Concurrency; i++ {
 		go handlerGoroutine(consumer, msgs, options, handler)
 	}
-	consumer.options.Logger.Infof("Processing messages on %v goroutines", options.Concurrency)
 	return nil
 }
 
@@ -193,21 +187,11 @@ func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOpti
 
 		switch handler(Delivery{msg}) {
 		case Ack:
-			err := msg.Ack(false)
-			if err != nil {
-				consumer.options.Logger.Errorf("can't ack message: %v", err)
-			}
+			msg.Ack(false)
 		case NackDiscard:
-			err := msg.Nack(false, false)
-			if err != nil {
-				consumer.options.Logger.Errorf("can't nack message: %v", err)
-			}
+			msg.Nack(false, false)
 		case NackRequeue:
-			err := msg.Nack(false, true)
-			if err != nil {
-				consumer.options.Logger.Errorf("can't nack message: %v", err)
-			}
+			msg.Nack(false, true)
 		}
 	}
-	consumer.options.Logger.Infof("rabbit consumer goroutine closed")
 }

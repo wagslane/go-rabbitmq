@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"log"
 )
 
 // Conn manages the connection to a rabbit cluster
@@ -29,7 +30,7 @@ func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error)
 		optionFunc(options)
 	}
 
-	manager, err := connectionmanager.NewConnectionManager(url, amqp.Config(options.Config), options.Logger, options.ReconnectInterval)
+	manager, err := connectionmanager.NewConnectionManager(url, amqp.Config(options.Config), options.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error)
 
 func (conn *Conn) handleRestarts() {
 	for err := range conn.reconnectErrCh {
-		conn.options.Logger.Infof("successful connection recovery from: %v", err)
+		log.Printf("successful connection recovery from: %v", err)
 	}
 }
 

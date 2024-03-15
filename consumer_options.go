@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
 
 // getDefaultConsumerOptions describes the options that will be used when a value isn't provided
@@ -28,7 +27,6 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 		},
 		ExchangeOptions: []ExchangeOptions{},
 		Concurrency:     1,
-		Logger:          stdDebugLogger{},
 		QOSPrefetch:     10,
 		QOSGlobal:       false,
 	}
@@ -66,7 +64,6 @@ type ConsumerOptions struct {
 	QueueOptions          QueueOptions
 	ExchangeOptions       []ExchangeOptions
 	Concurrency           int
-	Logger                logger.Logger
 	QOSPrefetch           int
 	QOSGlobal             bool
 }
@@ -280,19 +277,6 @@ func WithConsumerOptionsConsumerExclusive(options *ConsumerOptions) {
 // exception will be raised and the channel will be closed.
 func WithConsumerOptionsConsumerNoWait(options *ConsumerOptions) {
 	options.RabbitConsumerOptions.NoWait = true
-}
-
-// WithConsumerOptionsLogging uses a default logger that writes to std out
-func WithConsumerOptionsLogging(options *ConsumerOptions) {
-	options.Logger = &stdDebugLogger{}
-}
-
-// WithConsumerOptionsLogger sets logging to a custom interface.
-// Use WithConsumerOptionsLogging to just log to stdout.
-func WithConsumerOptionsLogger(log logger.Logger) func(options *ConsumerOptions) {
-	return func(options *ConsumerOptions) {
-		options.Logger = log
-	}
 }
 
 // WithConsumerOptionsQOSPrefetch returns a function that sets the prefetch count, which means that

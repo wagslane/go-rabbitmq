@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -78,7 +79,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		return nil, errors.New("connection manager can't be nil")
 	}
 
-	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, conn.connectionManager.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +113,9 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 
 	go func() {
 		for err := range publisher.reconnectErrCh {
-			publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
+			log.Printf("successful publisher recovery from: %v", err)
 			err := publisher.startup()
 			if err != nil {
-				publisher.options.Logger.Fatalf("error on startup for publisher after cancel or close: %v", err)
-				publisher.options.Logger.Fatalf("publisher closing, unable to recover")
 				return
 			}
 			publisher.startReturnHandler()
@@ -281,11 +280,7 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 func (publisher *Publisher) Close() {
 	// close the channel so that rabbitmq server knows that the
 	// publisher has been stopped.
-	err := publisher.chanManager.Close()
-	if err != nil {
-		publisher.options.Logger.Warnf("error while closing the channel: %v", err)
-	}
-	publisher.options.Logger.Infof("closing publisher...")
+	publisher.chanManager.Close()
 	go func() {
 		publisher.closeConnectionToManagerCh <- struct{}{}
 	}()

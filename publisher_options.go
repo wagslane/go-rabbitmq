@@ -6,7 +6,6 @@ import amqp "github.com/rabbitmq/amqp091-go"
 // Logger is a custom logging interface.
 type PublisherOptions struct {
 	ExchangeOptions ExchangeOptions
-	Logger          Logger
 	ConfirmMode     bool
 }
 
@@ -24,22 +23,7 @@ func getDefaultPublisherOptions() PublisherOptions {
 			Args:       Table{},
 			Declare:    false,
 		},
-		Logger:      stdDebugLogger{},
 		ConfirmMode: false,
-	}
-}
-
-// WithPublisherOptionsLogging sets logging to true on the publisher options
-// and sets the
-func WithPublisherOptionsLogging(options *PublisherOptions) {
-	options.Logger = &stdDebugLogger{}
-}
-
-// WithPublisherOptionsLogger sets logging to a custom interface.
-// Use WithPublisherOptionsLogging to just log to stdout.
-func WithPublisherOptionsLogger(log Logger) func(options *PublisherOptions) {
-	return func(options *PublisherOptions) {
-		options.Logger = log
 	}
 }
 

@@ -6,12 +6,10 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/dispatcher"
-	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
 
 // ConnectionManager -
 type ConnectionManager struct {
-	logger               logger.Logger
 	url                  string
 	connection           *amqp.Connection
 	amqpConfig           amqp.Config
@@ -23,13 +21,12 @@ type ConnectionManager struct {
 }
 
 // NewConnectionManager creates a new connection manager
-func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
+func NewConnectionManager(url string, conf amqp.Config, reconnectInterval time.Duration) (*ConnectionManager, error) {
 	conn, err := amqp.DialConfig(url, amqp.Config(conf))
 	if err != nil {
 		return nil, err
 	}
 	connManager := ConnectionManager{
-		logger:               log,
 		url:                  url,
 		connection:           conn,
 		amqpConfig:           conf,
@@ -45,7 +42,6 @@ func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, recon
 
 // Close safely closes the current channel and connection
 func (connManager *ConnectionManager) Close() error {
-	connManager.logger.Infof("closing connection manager...")
 	connManager.connectionMux.Lock()
 	defer connManager.connectionMux.Unlock()
 
@@ -82,13 +78,8 @@ func (connManager *ConnectionManager) startNotifyClose() {
 
 	err := <-notifyCloseChan
 	if err != nil {
-		connManager.logger.Errorf("attempting to reconnect to amqp server after connection close with error: %v", err)
 		connManager.reconnectLoop()
-		connManager.logger.Warnf("successfully reconnected to amqp server")
 		connManager.dispatcher.Dispatch(err)
-	}
-	if err == nil {
-		connManager.logger.Infof("amqp connection closed gracefully")
 	}
 }
 
@@ -108,12 +99,9 @@ func (connManager *ConnectionManager) incrementReconnectionCount() {
 // reconnectLoop continuously attempts to reconnect
 func (connManager *ConnectionManager) reconnectLoop() {
 	for {
-		connManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", connManager.ReconnectInterval)
 		time.Sleep(connManager.ReconnectInterval)
 		err := connManager.reconnect()
-		if err != nil {
-			connManager.logger.Errorf("error reconnecting to amqp server: %v", err)
-		} else {
+		if err == nil {
 			connManager.incrementReconnectionCount()
 			go connManager.startNotifyClose()
 			return
@@ -130,9 +118,7 @@ func (connManager *ConnectionManager) reconnect() error {
 		return err
 	}
 
-	if err = connManager.connection.Close(); err != nil {
-		connManager.logger.Warnf("error closing connection while reconnecting: %v", err)
-	}
+	connManager.connection.Close()
 
 	connManager.connection = newConn
 	return nil
