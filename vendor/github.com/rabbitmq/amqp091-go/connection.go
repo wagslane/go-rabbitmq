@@ -28,7 +28,7 @@ const (
 	defaultHeartbeat         = 10 * time.Second
 	defaultConnectionTimeout = 30 * time.Second
 	defaultProduct           = "AMQP 0.9.1 Client"
-	buildVersion             = "1.6.0"
+	buildVersion             = "1.9.0"
 	platform                 = "golang"
 	// Safer default that makes channel leaks a lot easier to spot
 	// before they create operational headaches. See https://github.com/rabbitmq/rabbitmq-server/issues/1593.
@@ -112,6 +112,8 @@ type Connection struct {
 	blocks   []chan Blocking
 
 	errors chan *Error
+	// if connection is closed should close this chan
+	close chan struct{}
 
 	Config Config // The negotiated Config after connection.open
 
@@ -263,6 +265,7 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 		rpc:       make(chan message),
 		sends:     make(chan time.Time),
 		errors:    make(chan *Error, 1),
+		close:     make(chan struct{}),
 		deadlines: make(chan readDeadliner, 1),
 	}
 	go c.reader(conn)
@@ -399,12 +402,47 @@ func (c *Connection) Close() error {
 	)
 }
 
+// CloseDeadline requests and waits for the response to close this AMQP connection.
+//
+// Accepts a deadline for waiting the server response. The deadline is passed
+// to the low-level connection i.e. network socket.
+//
+// Regardless of the error returned, the connection is considered closed, and it
+// should not be used after calling this function.
+//
+// In the event of an I/O timeout, connection-closed listeners are NOT informed.
+//
+// After returning from this call, all resources associated with this connection,
+// including the underlying io, Channels, Notify listeners and Channel consumers
+// will also be closed.
+func (c *Connection) CloseDeadline(deadline time.Time) error {
+	if c.IsClosed() {
+		return ErrClosed
+	}
+
+	defer c.shutdown(nil)
+
+	err := c.setDeadline(deadline)
+	if err != nil {
+		return err
+	}
+
+	return c.call(
+		&connectionClose{
+			ReplyCode: replySuccess,
+			ReplyText: "kthxbai",
+		},
+		&connectionCloseOk{},
+	)
+}
+
 func (c *Connection) closeWith(err *Error) error {
 	if c.IsClosed() {
 		return ErrClosed
 	}
 
 	defer c.shutdown(err)
+
 	return c.call(
 		&connectionClose{
 			ReplyCode: uint16(err.Code),
@@ -418,6 +456,18 @@ func (c *Connection) closeWith(err *Error) error {
 // is returned.
 func (c *Connection) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) == 1
+}
+
+// setDeadline is a wrapper to type assert Connection.conn and set an I/O
+// deadline in the underlying TCP connection socket, by calling
+// net.Conn.SetDeadline(). It returns an error, in case the type assertion fails,
+// although this should never happen.
+func (c *Connection) setDeadline(t time.Time) error {
+	con, ok := c.conn.(net.Conn)
+	if !ok {
+		return errInvalidTypeAssertion
+	}
+	return con.SetDeadline(t)
 }
 
 func (c *Connection) send(f frame) error {
@@ -550,6 +600,8 @@ func (c *Connection) shutdown(err *Error) {
 		}
 
 		c.conn.Close()
+		// reader exit
+		close(c.close)
 
 		c.channels = nil
 		c.allocator = nil
@@ -587,15 +639,23 @@ func (c *Connection) dispatch0(f frame) {
 				c <- Blocking{Active: false}
 			}
 		default:
-			c.rpc <- m
+			select {
+			case <-c.close:
+				return
+			case c.rpc <- m:
+			}
+
 		}
 	case *heartbeatFrame:
 		// kthx - all reads reset our deadline.  so we can drop this
 	default:
 		// lolwat - channel0 only responds to methods and heartbeats
-		if err := c.closeWith(ErrUnexpectedFrame); err != nil {
-			Logger.Printf("error sending connectionCloseOk with ErrUnexpectedFrame, error: %+v", err)
-		}
+		// closeWith use call don't block reader
+		go func() {
+			if err := c.closeWith(ErrUnexpectedFrame); err != nil {
+				Logger.Printf("error sending connectionCloseOk with ErrUnexpectedFrame, error: %+v", err)
+			}
+		}()
 	}
 }
 
@@ -642,9 +702,12 @@ func (c *Connection) dispatchClosed(f frame) {
 			// we are already closed, so do nothing
 		default:
 			// unexpected method on closed channel
-			if err := c.closeWith(ErrClosed); err != nil {
-				Logger.Printf("error sending connectionCloseOk with ErrClosed, error: %+v", err)
-			}
+			// closeWith use call don't block reader
+			go func() {
+				if err := c.closeWith(ErrClosed); err != nil {
+					Logger.Printf("error sending connectionCloseOk with ErrClosed, error: %+v", err)
+				}
+			}()
 		}
 	}
 }
@@ -766,13 +829,16 @@ func (c *Connection) allocateChannel() (*Channel, error) {
 
 // releaseChannel removes a channel from the registry as the final part of the
 // channel lifecycle
-func (c *Connection) releaseChannel(id uint16) {
+func (c *Connection) releaseChannel(ch *Channel) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	if !c.IsClosed() {
-		delete(c.channels, id)
-		c.allocator.release(int(id))
+		got, ok := c.channels[ch.id]
+		if ok && got == ch {
+			delete(c.channels, ch.id)
+			c.allocator.release(int(ch.id))
+		}
 	}
 }
 
@@ -784,7 +850,7 @@ func (c *Connection) openChannel() (*Channel, error) {
 	}
 
 	if err := ch.open(); err != nil {
-		c.releaseChannel(ch.id)
+		c.releaseChannel(ch)
 		return nil, err
 	}
 	return ch, nil
@@ -795,7 +861,7 @@ func (c *Connection) openChannel() (*Channel, error) {
 // this connection.
 func (c *Connection) closeChannel(ch *Channel, e *Error) {
 	ch.shutdown(e)
-	c.releaseChannel(ch.id)
+	c.releaseChannel(ch)
 }
 
 /*
@@ -816,13 +882,14 @@ func (c *Connection) call(req message, res ...message) error {
 		}
 	}
 
-	msg, ok := <-c.rpc
-	if !ok {
-		err, errorsChanIsOpen := <-c.errors
-		if !errorsChanIsOpen {
-			return ErrClosed
+	var msg message
+	select {
+	case e, ok := <-c.errors:
+		if ok {
+			return e
 		}
-		return err
+		return ErrClosed
+	case msg = <-c.rpc:
 	}
 
 	// Try to match one of the result types
