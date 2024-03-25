@@ -19,6 +19,11 @@ fmt: ## Run go fmt against code
 tests: ## Run all tests and requires a running rabbitmq-server. Use GO_TEST_FLAGS to add extra flags to go test
 	go test -race -v -tags integration $(GO_TEST_FLAGS)
 
+.PHONY: tests-docker
+tests-docker: rabbitmq-server
+	RABBITMQ_RABBITMQCTL_PATH="DOCKER:$(CONTAINER_NAME)" go test -race -v -tags integration $(GO_TEST_FLAGS)
+	$(MAKE) stop-rabbitmq-server
+
 .PHONY: check
 check:
 	golangci-lint run ./...
@@ -34,3 +39,19 @@ rabbitmq-server: ## Start a RabbitMQ server using Docker. Container name can be 
 .PHONY: stop-rabbitmq-server
 stop-rabbitmq-server: ## Stop a RabbitMQ server using Docker. Container name can be customised with CONTAINER_NAME=some-rabbit
 	docker stop $(CONTAINER_NAME)
+
+certs:
+	./certs.sh
+
+.PHONY: certs-rm
+certs-rm:
+	rm -r ./certs/
+
+.PHONY: rabbitmq-server-tls
+rabbitmq-server-tls: | certs ## Start a RabbitMQ server using Docker. Container name can be customised with CONTAINER_NAME=some-rabbit
+	docker run --detach --rm --name $(CONTAINER_NAME) \
+		--publish 5672:5672 --publish 5671:5671 --publish 15672:15672 \
+		--mount type=bind,src=./certs/server,dst=/certs \
+		--mount type=bind,src=./certs/ca/cacert.pem,dst=/certs/cacert.pem,readonly \
+		--mount type=bind,src=./rabbitmq-confs/tls/90-tls.conf,dst=/etc/rabbitmq/conf.d/90-tls.conf \
+		--pull always rabbitmq:3-management
