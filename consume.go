@@ -152,7 +152,7 @@ func (consumer *Consumer) Close() {
 // Only call once.
 func (consumer *Consumer) CloseWithContext(ctx context.Context) {
 	if consumer.options.CloseGracefully {
-		err := consumer.waitForHandlers(context.Background())
+		err := consumer.waitForHandlers(ctx)
 		if err != nil {
 			consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
 		}
