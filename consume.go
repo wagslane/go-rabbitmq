@@ -122,6 +122,7 @@ func (consumer *Consumer) Run(handler Handler) error {
 // Only call once.
 func (consumer *Consumer) Close() {
 	if consumer.options.CloseGracefully {
+		consumer.options.Logger.Infof("waiting for handlers to finish...")
 		err := consumer.waitForHandlers(context.Background())
 		if err != nil {
 			consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
