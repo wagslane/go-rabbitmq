@@ -314,7 +314,7 @@ func WithConsumerOptionsQOSGlobal(options *ConsumerOptions) {
 }
 
 // WithConsumerOptionsForceShutdown tells the consumer to not wait for
-// the handlers to complete in consumer.Close
+// the handler to complete in consumer.Close
 func WithConsumerOptionsForceShutdown(options *ConsumerOptions) {
 	options.CloseGracefully = false
 }
