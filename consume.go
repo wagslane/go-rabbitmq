@@ -259,9 +259,7 @@ func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOpti
 }
 
 func (consumer *Consumer) waitForHandlerCompletion(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	} else if ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	c := make(chan struct{})
