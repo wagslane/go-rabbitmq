@@ -131,6 +131,8 @@ func (consumer *Consumer) startGoroutines(
 	handler Handler,
 	options ConsumerOptions,
 ) error {
+	consumer.isClosedMux.Lock()
+	defer consumer.isClosedMux.Unlock()
 	err := consumer.chanManager.QosSafe(
 		options.QOSPrefetch,
 		0,
