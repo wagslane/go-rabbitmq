@@ -33,10 +33,10 @@ type Consumer struct {
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 	options                    ConsumerOptions
-	handlerMux                 *sync.RWMutex
+	handlerMu                  *sync.RWMutex
 
-	isClosedMux *sync.RWMutex
-	isClosed    bool
+	isClosedMu *sync.RWMutex
+	isClosed   bool
 }
 
 // Delivery captures the fields for a previously delivered message resident in
@@ -73,7 +73,7 @@ func NewConsumer(
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
-		isClosedMux:                &sync.RWMutex{},
+		isClosedMu:                 &sync.RWMutex{},
 		isClosed:                   false,
 	}
 
@@ -92,10 +92,10 @@ func (consumer *Consumer) Run(handler Handler) error {
 	}
 
 	handler = func(d Delivery) (action Action) {
-		if !consumer.handlerMux.TryRLock() {
+		if !consumer.handlerMu.TryRLock() {
 			return NackRequeue
 		}
-		defer consumer.handlerMux.RUnlock()
+		defer consumer.handlerMu.RUnlock()
 		return handler(d)
 	}
 
@@ -134,8 +134,8 @@ func (consumer *Consumer) Close() {
 }
 
 func (consumer *Consumer) cleanupResources() {
-	consumer.isClosedMux.Lock()
-	defer consumer.isClosedMux.Unlock()
+	consumer.isClosedMu.Lock()
+	defer consumer.isClosedMu.Unlock()
 	consumer.isClosed = true
 	// close the channel so that rabbitmq server knows that the
 	// consumer has been stopped.
@@ -175,8 +175,8 @@ func (consumer *Consumer) startGoroutines(
 	handler Handler,
 	options ConsumerOptions,
 ) error {
-	consumer.isClosedMux.Lock()
-	defer consumer.isClosedMux.Unlock()
+	consumer.isClosedMu.Lock()
+	defer consumer.isClosedMu.Unlock()
 	err := consumer.chanManager.QosSafe(
 		options.QOSPrefetch,
 		0,
@@ -221,8 +221,8 @@ func (consumer *Consumer) startGoroutines(
 }
 
 func (consumer *Consumer) getIsClosed() bool {
-	consumer.isClosedMux.RLock()
-	defer consumer.isClosedMux.RUnlock()
+	consumer.isClosedMu.RLock()
+	defer consumer.isClosedMu.RUnlock()
 	return consumer.isClosed
 }
 
@@ -259,15 +259,13 @@ func handlerGoroutine(consumer *Consumer, msgs <-chan amqp.Delivery, consumeOpti
 }
 
 func (consumer *Consumer) waitForHandlerCompletion(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	} else if ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	c := make(chan struct{})
 	go func() {
-		consumer.handlerMux.Lock()
-		defer consumer.handlerMux.Unlock()
+		consumer.handlerMu.Lock()
+		defer consumer.handlerMu.Unlock()
 		close(c)
 	}()
 	select {

@@ -10,8 +10,8 @@ import (
 
 // Dispatcher -
 type Dispatcher struct {
-	subscribers    map[int]dispatchSubscriber
-	subscribersMux *sync.Mutex
+	subscribers   map[int]dispatchSubscriber
+	subscribersMu *sync.Mutex
 }
 
 type dispatchSubscriber struct {
@@ -22,15 +22,15 @@ type dispatchSubscriber struct {
 // NewDispatcher -
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		subscribers:    make(map[int]dispatchSubscriber),
-		subscribersMux: &sync.Mutex{},
+		subscribers:   make(map[int]dispatchSubscriber),
+		subscribersMu: &sync.Mutex{},
 	}
 }
 
 // Dispatch -
 func (d *Dispatcher) Dispatch(err error) error {
-	d.subscribersMux.Lock()
-	defer d.subscribersMux.Unlock()
+	d.subscribersMu.Lock()
+	defer d.subscribersMu.Unlock()
 	for _, subscriber := range d.subscribers {
 		select {
 		case <-time.After(time.Second * 5):
@@ -50,17 +50,17 @@ func (d *Dispatcher) AddSubscriber() (<-chan error, chan<- struct{}) {
 	closeCh := make(chan struct{})
 	notifyCancelOrCloseChan := make(chan error)
 
-	d.subscribersMux.Lock()
+	d.subscribersMu.Lock()
 	d.subscribers[id] = dispatchSubscriber{
 		notifyCancelOrCloseChan: notifyCancelOrCloseChan,
 		closeCh:                 closeCh,
 	}
-	d.subscribersMux.Unlock()
+	d.subscribersMu.Unlock()
 
 	go func(id int) {
 		<-closeCh
-		d.subscribersMux.Lock()
-		defer d.subscribersMux.Unlock()
+		d.subscribersMu.Lock()
+		defer d.subscribersMu.Unlock()
 		sub, ok := d.subscribers[id]
 		if !ok {
 			return

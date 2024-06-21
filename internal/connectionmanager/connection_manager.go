@@ -13,15 +13,15 @@ import (
 
 // ConnectionManager -
 type ConnectionManager struct {
-	logger               logger.Logger
-	resolver             Resolver
-	connection           *amqp.Connection
-	amqpConfig           amqp.Config
-	connectionMux        *sync.RWMutex
-	ReconnectInterval    time.Duration
-	reconnectionCount    uint
-	reconnectionCountMux *sync.Mutex
-	dispatcher           *dispatcher.Dispatcher
+	logger              logger.Logger
+	resolver            Resolver
+	connection          *amqp.Connection
+	amqpConfig          amqp.Config
+	connectionMu        *sync.RWMutex
+	ReconnectInterval   time.Duration
+	reconnectionCount   uint
+	reconnectionCountMu *sync.Mutex
+	dispatcher          *dispatcher.Dispatcher
 }
 
 type Resolver interface {
@@ -56,15 +56,15 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 	}
 
 	connManager := ConnectionManager{
-		logger:               log,
-		resolver:             resolver,
-		connection:           conn,
-		amqpConfig:           conf,
-		connectionMux:        &sync.RWMutex{},
-		ReconnectInterval:    reconnectInterval,
-		reconnectionCount:    0,
-		reconnectionCountMux: &sync.Mutex{},
-		dispatcher:           dispatcher.NewDispatcher(),
+		logger:              log,
+		resolver:            resolver,
+		connection:          conn,
+		amqpConfig:          conf,
+		connectionMu:        &sync.RWMutex{},
+		ReconnectInterval:   reconnectInterval,
+		reconnectionCount:   0,
+		reconnectionCountMu: &sync.Mutex{},
+		dispatcher:          dispatcher.NewDispatcher(),
 	}
 	go connManager.startNotifyClose()
 	return &connManager, nil
@@ -73,8 +73,8 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 // Close safely closes the current channel and connection
 func (connManager *ConnectionManager) Close() error {
 	connManager.logger.Infof("closing connection manager...")
-	connManager.connectionMux.Lock()
-	defer connManager.connectionMux.Unlock()
+	connManager.connectionMu.Lock()
+	defer connManager.connectionMu.Unlock()
 
 	err := connManager.connection.Close()
 	if err != nil {
@@ -91,13 +91,13 @@ func (connManager *ConnectionManager) NotifyReconnect() (<-chan error, chan<- st
 
 // CheckoutConnection -
 func (connManager *ConnectionManager) CheckoutConnection() *amqp.Connection {
-	connManager.connectionMux.RLock()
+	connManager.connectionMu.RLock()
 	return connManager.connection
 }
 
 // CheckinConnection -
 func (connManager *ConnectionManager) CheckinConnection() {
-	connManager.connectionMux.RUnlock()
+	connManager.connectionMu.RUnlock()
 }
 
 // startNotifyCancelOrClosed listens on the channel's cancelled and closed
@@ -121,14 +121,14 @@ func (connManager *ConnectionManager) startNotifyClose() {
 
 // GetReconnectionCount -
 func (connManager *ConnectionManager) GetReconnectionCount() uint {
-	connManager.reconnectionCountMux.Lock()
-	defer connManager.reconnectionCountMux.Unlock()
+	connManager.reconnectionCountMu.Lock()
+	defer connManager.reconnectionCountMu.Unlock()
 	return connManager.reconnectionCount
 }
 
 func (connManager *ConnectionManager) incrementReconnectionCount() {
-	connManager.reconnectionCountMux.Lock()
-	defer connManager.reconnectionCountMux.Unlock()
+	connManager.reconnectionCountMu.Lock()
+	defer connManager.reconnectionCountMu.Unlock()
 	connManager.reconnectionCount++
 }
 
@@ -150,8 +150,8 @@ func (connManager *ConnectionManager) reconnectLoop() {
 
 // reconnect safely closes the current channel and obtains a new one
 func (connManager *ConnectionManager) reconnect() error {
-	connManager.connectionMux.Lock()
-	defer connManager.connectionMux.Unlock()
+	connManager.connectionMu.Lock()
+	defer connManager.connectionMu.Unlock()
 
 	conn, err := dial(connManager.logger, connManager.resolver, amqp.Config(connManager.amqpConfig))
 	if err != nil {
