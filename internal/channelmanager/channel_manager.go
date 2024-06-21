@@ -13,14 +13,14 @@ import (
 
 // ChannelManager -
 type ChannelManager struct {
-	logger               logger.Logger
-	channel              *amqp.Channel
-	connManager          *connectionmanager.ConnectionManager
-	channelMux           *sync.RWMutex
-	reconnectInterval    time.Duration
-	reconnectionCount    uint
-	reconnectionCountMux *sync.Mutex
-	dispatcher           *dispatcher.Dispatcher
+	logger              logger.Logger
+	channel             *amqp.Channel
+	connManager         *connectionmanager.ConnectionManager
+	channelMu           *sync.RWMutex
+	reconnectInterval   time.Duration
+	reconnectionCount   uint
+	reconnectionCountMu *sync.Mutex
+	dispatcher          *dispatcher.Dispatcher
 }
 
 // NewChannelManager creates a new connection manager
@@ -31,14 +31,14 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 	}
 
 	chanManager := ChannelManager{
-		logger:               log,
-		connManager:          connManager,
-		channel:              ch,
-		channelMux:           &sync.RWMutex{},
-		reconnectInterval:    reconnectInterval,
-		reconnectionCount:    0,
-		reconnectionCountMux: &sync.Mutex{},
-		dispatcher:           dispatcher.NewDispatcher(),
+		logger:              log,
+		connManager:         connManager,
+		channel:             ch,
+		channelMu:           &sync.RWMutex{},
+		reconnectInterval:   reconnectInterval,
+		reconnectionCount:   0,
+		reconnectionCountMu: &sync.Mutex{},
+		dispatcher:          dispatcher.NewDispatcher(),
 	}
 	go chanManager.startNotifyCancelOrClosed()
 	return &chanManager, nil
@@ -84,14 +84,14 @@ func (chanManager *ChannelManager) startNotifyCancelOrClosed() {
 
 // GetReconnectionCount -
 func (chanManager *ChannelManager) GetReconnectionCount() uint {
-	chanManager.reconnectionCountMux.Lock()
-	defer chanManager.reconnectionCountMux.Unlock()
+	chanManager.reconnectionCountMu.Lock()
+	defer chanManager.reconnectionCountMu.Unlock()
 	return chanManager.reconnectionCount
 }
 
 func (chanManager *ChannelManager) incrementReconnectionCount() {
-	chanManager.reconnectionCountMux.Lock()
-	defer chanManager.reconnectionCountMux.Unlock()
+	chanManager.reconnectionCountMu.Lock()
+	defer chanManager.reconnectionCountMu.Unlock()
 	chanManager.reconnectionCount++
 }
 
@@ -113,8 +113,8 @@ func (chanManager *ChannelManager) reconnectLoop() {
 
 // reconnect safely closes the current channel and obtains a new one
 func (chanManager *ChannelManager) reconnect() error {
-	chanManager.channelMux.Lock()
-	defer chanManager.channelMux.Unlock()
+	chanManager.channelMu.Lock()
+	defer chanManager.channelMu.Unlock()
 	newChannel, err := getNewChannel(chanManager.connManager)
 	if err != nil {
 		return err
@@ -131,8 +131,8 @@ func (chanManager *ChannelManager) reconnect() error {
 // Close safely closes the current channel and connection
 func (chanManager *ChannelManager) Close() error {
 	chanManager.logger.Infof("closing channel manager...")
-	chanManager.channelMux.Lock()
-	defer chanManager.channelMux.Unlock()
+	chanManager.channelMu.Lock()
+	defer chanManager.channelMu.Unlock()
 
 	err := chanManager.channel.Close()
 	if err != nil {

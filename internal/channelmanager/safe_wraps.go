@@ -16,8 +16,8 @@ func (chanManager *ChannelManager) ConsumeSafe(
 	noWait bool,
 	args amqp.Table,
 ) (<-chan amqp.Delivery, error) {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.Consume(
 		queue,
@@ -39,8 +39,8 @@ func (chanManager *ChannelManager) QueueDeclarePassiveSafe(
 	noWait bool,
 	args amqp.Table,
 ) (amqp.Queue, error) {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.QueueDeclarePassive(
 		name,
@@ -56,8 +56,8 @@ func (chanManager *ChannelManager) QueueDeclarePassiveSafe(
 func (chanManager *ChannelManager) QueueDeclareSafe(
 	name string, durable bool, autoDelete bool, exclusive bool, noWait bool, args amqp.Table,
 ) (amqp.Queue, error) {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.QueueDeclare(
 		name,
@@ -73,8 +73,8 @@ func (chanManager *ChannelManager) QueueDeclareSafe(
 func (chanManager *ChannelManager) ExchangeDeclarePassiveSafe(
 	name string, kind string, durable bool, autoDelete bool, internal bool, noWait bool, args amqp.Table,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.ExchangeDeclarePassive(
 		name,
@@ -91,8 +91,8 @@ func (chanManager *ChannelManager) ExchangeDeclarePassiveSafe(
 func (chanManager *ChannelManager) ExchangeDeclareSafe(
 	name string, kind string, durable bool, autoDelete bool, internal bool, noWait bool, args amqp.Table,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.ExchangeDeclare(
 		name,
@@ -109,8 +109,8 @@ func (chanManager *ChannelManager) ExchangeDeclareSafe(
 func (chanManager *ChannelManager) QueueBindSafe(
 	name string, key string, exchange string, noWait bool, args amqp.Table,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.QueueBind(
 		name,
@@ -125,8 +125,8 @@ func (chanManager *ChannelManager) QueueBindSafe(
 func (chanManager *ChannelManager) QosSafe(
 	prefetchCount int, prefetchSize int, global bool,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.Qos(
 		prefetchCount,
@@ -141,8 +141,8 @@ PublishSafe safely wraps the (*amqp.Channel).Publish method.
 func (chanManager *ChannelManager) PublishSafe(
 	exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.PublishWithContext(
 		context.Background(),
@@ -158,8 +158,8 @@ func (chanManager *ChannelManager) PublishSafe(
 func (chanManager *ChannelManager) PublishWithContextSafe(
 	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) error {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.PublishWithContext(
 		ctx,
@@ -174,8 +174,8 @@ func (chanManager *ChannelManager) PublishWithContextSafe(
 func (chanManager *ChannelManager) PublishWithDeferredConfirmWithContextSafe(
 	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) (*amqp.DeferredConfirmation, error) {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.PublishWithDeferredConfirmWithContext(
 		ctx,
@@ -191,8 +191,8 @@ func (chanManager *ChannelManager) PublishWithDeferredConfirmWithContextSafe(
 func (chanManager *ChannelManager) NotifyReturnSafe(
 	c chan amqp.Return,
 ) chan amqp.Return {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.NotifyReturn(
 		c,
@@ -203,8 +203,8 @@ func (chanManager *ChannelManager) NotifyReturnSafe(
 func (chanManager *ChannelManager) ConfirmSafe(
 	noWait bool,
 ) error {
-	chanManager.channelMux.Lock()
-	defer chanManager.channelMux.Unlock()
+	chanManager.channelMu.Lock()
+	defer chanManager.channelMu.Unlock()
 
 	return chanManager.channel.Confirm(
 		noWait,
@@ -215,8 +215,8 @@ func (chanManager *ChannelManager) ConfirmSafe(
 func (chanManager *ChannelManager) NotifyPublishSafe(
 	confirm chan amqp.Confirmation,
 ) chan amqp.Confirmation {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.NotifyPublish(
 		confirm,
@@ -227,8 +227,8 @@ func (chanManager *ChannelManager) NotifyPublishSafe(
 func (chanManager *ChannelManager) NotifyFlowSafe(
 	c chan bool,
 ) chan bool {
-	chanManager.channelMux.RLock()
-	defer chanManager.channelMux.RUnlock()
+	chanManager.channelMu.RLock()
+	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.NotifyFlow(
 		c,
