@@ -28,6 +28,7 @@ func getDefaultConsumerOptions(queueName string) ConsumerOptions {
 		},
 		ExchangeOptions: []ExchangeOptions{},
 		Concurrency:     1,
+		CloseGracefully: true,
 		Logger:          stdDebugLogger{},
 		QOSPrefetch:     10,
 		QOSGlobal:       false,
@@ -64,6 +65,7 @@ func getDefaultBindingOptions() BindingOptions {
 type ConsumerOptions struct {
 	RabbitConsumerOptions RabbitConsumerOptions
 	QueueOptions          QueueOptions
+	CloseGracefully       bool
 	ExchangeOptions       []ExchangeOptions
 	Concurrency           int
 	Logger                logger.Logger
@@ -309,6 +311,12 @@ func WithConsumerOptionsQOSPrefetch(prefetchCount int) func(*ConsumerOptions) {
 // consumers on all channels on the same connection
 func WithConsumerOptionsQOSGlobal(options *ConsumerOptions) {
 	options.QOSGlobal = true
+}
+
+// WithConsumerOptionsForceShutdown tells the consumer to not wait for
+// the handler to complete in consumer.Close
+func WithConsumerOptionsForceShutdown(options *ConsumerOptions) {
+	options.CloseGracefully = false
 }
 
 // WithConsumerOptionsQueueQuorum sets the queue a quorum type, which means
