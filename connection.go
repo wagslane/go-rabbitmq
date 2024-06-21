@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	"math/rand"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
 )
@@ -21,19 +23,46 @@ type Conn struct {
 // will be stored in the returned connection's Config field.
 type Config amqp.Config
 
+type Resolver = connectionmanager.Resolver
+
+type StaticResolver struct {
+	urls   []string
+	shuffe bool
+}
+
+func (r *StaticResolver) Resolve() ([]string, error) {
+	// TODO: move to slices.Clone when supported Go versions > 1.21
+	var urls []string
+	urls = append(urls, r.urls...)
+
+	if r.shuffe {
+		rand.Shuffle(len(urls), func(i, j int) {
+			urls[i], urls[j] = urls[j], urls[i]
+		})
+	}
+	return urls, nil
+}
+
+func NewStaticResolver(urls []string, shuffle bool) *StaticResolver {
+	return &StaticResolver{urls: urls}
+}
+
 // NewConn creates a new connection manager
-func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error) {
+func NewConn(url string, opts ...func(*ConnectionOptions)) (*Conn, error) {
+	return NewClusterConn(NewStaticResolver([]string{url}, false), opts...)
+}
+
+func NewClusterConn(resolver Resolver, opts ...func(*ConnectionOptions)) (*Conn, error) {
 	defaultOptions := getDefaultConnectionOptions()
 	options := &defaultOptions
-	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
+	for _, optFn := range opts {
+		optFn(options)
 	}
 
-	manager, err := connectionmanager.NewConnectionManager(url, amqp.Config(options.Config), options.Logger, options.ReconnectInterval)
+	manager, err := connectionmanager.NewConnectionManager(resolver, amqp.Config(options.Config), options.Logger, options.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
-
 	reconnectErrCh, closeCh := manager.NotifyReconnect()
 	conn := &Conn{
 		connectionManager:          manager,
@@ -41,7 +70,6 @@ func NewConn(url string, optionFuncs ...func(*ConnectionOptions)) (*Conn, error)
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
 	}
-
 	go conn.handleRestarts()
 	return conn, nil
 }

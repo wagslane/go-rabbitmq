@@ -1,6 +1,8 @@
 package connectionmanager
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,7 +14,7 @@ import (
 // ConnectionManager -
 type ConnectionManager struct {
 	logger               logger.Logger
-	url                  string
+	resolver             Resolver
 	connection           *amqp.Connection
 	amqpConfig           amqp.Config
 	connectionMux        *sync.RWMutex
@@ -22,15 +24,40 @@ type ConnectionManager struct {
 	dispatcher           *dispatcher.Dispatcher
 }
 
+type Resolver interface {
+	Resolve() ([]string, error)
+}
+
+// dial will attempt to connect to the a list of urls in the order they are
+// given.
+func dial(log logger.Logger, resolver Resolver, conf amqp.Config) (*amqp.Connection, error) {
+	urls, err := resolver.Resolve()
+	if err != nil {
+		return nil, fmt.Errorf("error resolving amqp server urls: %w", err)
+	}
+
+	var errs []error
+	for _, url := range urls {
+		conn, err := amqp.DialConfig(url, amqp.Config(conf))
+		if err == nil {
+			return conn, err
+		}
+		log.Warnf("failed to connect to amqp server %s: %v", url, err)
+		errs = append(errs, err)
+	}
+	return nil, errors.Join(errs...)
+}
+
 // NewConnectionManager creates a new connection manager
-func NewConnectionManager(url string, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
-	conn, err := amqp.DialConfig(url, amqp.Config(conf))
+func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
+	conn, err := dial(log, resolver, amqp.Config(conf))
 	if err != nil {
 		return nil, err
 	}
+
 	connManager := ConnectionManager{
 		logger:               log,
-		url:                  url,
+		resolver:             resolver,
 		connection:           conn,
 		amqpConfig:           conf,
 		connectionMux:        &sync.RWMutex{},
@@ -125,7 +152,8 @@ func (connManager *ConnectionManager) reconnectLoop() {
 func (connManager *ConnectionManager) reconnect() error {
 	connManager.connectionMux.Lock()
 	defer connManager.connectionMux.Unlock()
-	newConn, err := amqp.DialConfig(connManager.url, amqp.Config(connManager.amqpConfig))
+
+	conn, err := dial(connManager.logger, connManager.resolver, amqp.Config(connManager.amqpConfig))
 	if err != nil {
 		return err
 	}
@@ -134,6 +162,6 @@ func (connManager *ConnectionManager) reconnect() error {
 		connManager.logger.Warnf("error closing connection while reconnecting: %v", err)
 	}
 
-	connManager.connection = newConn
+	connManager.connection = conn
 	return nil
 }
