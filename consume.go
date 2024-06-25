@@ -73,6 +73,7 @@ func NewConsumer(
 		reconnectErrCh:             reconnectErrCh,
 		closeConnectionToManagerCh: closeCh,
 		options:                    *options,
+		handlerMu:                  &sync.RWMutex{},
 		isClosedMu:                 &sync.RWMutex{},
 		isClosed:                   false,
 	}
