@@ -119,6 +119,12 @@ Close your publishers and consumers when you're done with them and do *not* atte
 
 Note that the API is currently in `v0`. I don't plan on huge changes, but there may be some small breaking changes before we hit `v1`.
 
+## Integration testing
+
+By setting `ENABLE_DOCKER_INTEGRATION_TESTS=TRUE` during `go test -v ./...`, the integration tests will run. These launch a rabbitmq container in the local Docker daemon and test some publish/consume actions.
+
+See [integration_test.go](integration_test.go).
+
 ## 💬 Contact
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/wagslane.svg?label=Follow%20Wagslane&style=social)](https://twitter.com/intent/follow?screen_name=wagslane)
