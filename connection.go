@@ -4,6 +4,7 @@ import (
 	"math/rand"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
 	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
 )
 
@@ -26,8 +27,8 @@ type Config amqp.Config
 type Resolver = connectionmanager.Resolver
 
 type StaticResolver struct {
-	urls   []string
-	shuffe bool
+	urls    []string
+	shuffle bool
 }
 
 func (r *StaticResolver) Resolve() ([]string, error) {
@@ -35,7 +36,7 @@ func (r *StaticResolver) Resolve() ([]string, error) {
 	var urls []string
 	urls = append(urls, r.urls...)
 
-	if r.shuffe {
+	if r.shuffle {
 		rand.Shuffle(len(urls), func(i, j int) {
 			urls[i], urls[j] = urls[j], urls[i]
 		})
@@ -44,7 +45,7 @@ func (r *StaticResolver) Resolve() ([]string, error) {
 }
 
 func NewStaticResolver(urls []string, shuffle bool) *StaticResolver {
-	return &StaticResolver{urls: urls}
+	return &StaticResolver{urls: urls, shuffle: shuffle}
 }
 
 // NewConn creates a new connection manager
