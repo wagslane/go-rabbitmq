@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOPROXY: "https://proxy.golang.org,direct"
+      ENABLE_DOCKER_INTEGRATION_TESTS: TRUE
 
     steps:
       - name: Set up Go
