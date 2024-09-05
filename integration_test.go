@@ -40,11 +40,13 @@ func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
 	defer cancel()
 	tkr := time.NewTicker(time.Second)
 
-	// only log connection-level logs when verbose is enabled
-	connLogger := simpleLogF(func(s string, i ...interface{}) {})
-	if testing.Verbose() {
-		connLogger = simpleLogF(t.Logf)
-	}
+	// only log connection-level logs when connection has succeeded
+	muted := true
+	connLogger := simpleLogF(func(s string, i ...interface{}) {
+		if !muted {
+			t.Logf(s, i...)
+		}
+	})
 
 	var lastErr error
 	for {
@@ -71,6 +73,7 @@ func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
 					t.Log("publish ping failed", err.Error())
 				} else {
 					t.Log("ping successful")
+					muted = true
 					return conn
 				}
 			}
