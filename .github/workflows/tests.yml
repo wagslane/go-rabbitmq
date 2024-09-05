@@ -10,12 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOPROXY: "https://proxy.golang.org,direct"
+      ENABLE_DOCKER_INTEGRATION_TESTS: TRUE
 
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: "1.20"
+          go-version: "1.22"
         id: go
 
       - name: Check out code into the Go module directory
