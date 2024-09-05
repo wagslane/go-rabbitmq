@@ -40,16 +40,24 @@ func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
 	defer cancel()
 	tkr := time.NewTicker(time.Second)
 
+	// only log connection-level logs when verbose is enabled
+	connLogger := simpleLogF(func(s string, i ...interface{}) {})
+	if testing.Verbose() {
+		connLogger = simpleLogF(t.Logf)
+	}
+
+	var lastErr error
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatal("timed out waiting for healthy amqp", ctx.Err())
+			t.Fatal("timed out waiting for healthy amqp", lastErr)
 			return nil
 		case <-tkr.C:
 			t.Log("attempting connection")
-			conn, err := NewConn(connStr, WithConnectionOptionsLogger(simpleLogF(t.Logf)))
+			conn, err := NewConn(connStr, WithConnectionOptionsLogger(connLogger))
 			if err != nil {
-				t.Log("failed to connect", err.Error())
+				lastErr = err
+				t.Log("connection attempt failed - retrying")
 			} else {
 				if err := func() error {
 					pub, err := NewPublisher(conn, WithPublisherOptionsLogger(simpleLogF(t.Logf)))
