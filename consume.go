@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/makometr/go-rabbitmq/internal/channelmanager"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
 )
 
 // Action is an action that occurs after processed this delivery
@@ -62,7 +62,7 @@ func NewConsumer(
 		return nil, errors.New("connection manager can't be nil")
 	}
 
-	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, false, options.Logger, conn.connectionManager.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}

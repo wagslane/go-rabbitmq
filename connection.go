@@ -5,7 +5,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
+	"github.com/makometr/go-rabbitmq/internal/connectionmanager"
 )
 
 // Conn manages the connection to a rabbit cluster

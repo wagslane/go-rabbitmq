@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/makometr/go-rabbitmq/internal/channelmanager"
+	"github.com/makometr/go-rabbitmq/internal/connectionmanager"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
-	"github.com/wagslane/go-rabbitmq/internal/connectionmanager"
 )
 
 // DeliveryMode. Transient means higher throughput but messages will not be
@@ -78,7 +78,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		return nil, errors.New("connection manager can't be nil")
 	}
 
-	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.Logger, conn.connectionManager.ReconnectInterval)
+	chanManager, err := channelmanager.NewChannelManager(conn.connectionManager, options.ConfirmMode, options.Logger, conn.connectionManager.ReconnectInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +272,7 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		}
 		deferredConfirmations = append(deferredConfirmations, conf)
 	}
+
 	return deferredConfirmations, nil
 }
 
