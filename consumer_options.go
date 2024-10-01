@@ -1,6 +1,8 @@
 package rabbitmq
 
 import (
+	"time"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
@@ -328,4 +330,17 @@ func WithConsumerOptionsQueueQuorum(options *ConsumerOptions) {
 	}
 
 	options.QueueOptions.Args["x-queue-type"] = "quorum"
+}
+
+// WithConsumerOptionsQueueMessageExpiration sets the message expiration (TTL) for all messages in the queue.
+// This option defines how long a message can remain in the queue before it is discarded if not consumed.
+// The TTL is specified as a time.Duration and will be converted to milliseconds for RabbitMQ.
+// See https://www.rabbitmq.com/docs/ttl#per-queue-message-ttl
+func WithConsumerOptionsQueueMessageExpiration(ttl time.Duration) func(*ConsumerOptions) {
+	return func(options *ConsumerOptions) {
+		if options.QueueOptions.Args == nil {
+			options.QueueOptions.Args = Table{}
+		}
+		options.QueueOptions.Args["x-message-ttl"] = ttl.Milliseconds()
+	}
 }
