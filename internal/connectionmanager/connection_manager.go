@@ -3,6 +3,7 @@ package connectionmanager
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -42,10 +43,17 @@ func dial(log logger.Logger, resolver Resolver, conf amqp.Config) (*amqp.Connect
 		if err == nil {
 			return conn, err
 		}
-		log.Warnf("failed to connect to amqp server %s: %v", url, err)
+
+		// Log masked url
+		log.Warnf("failed to connect to amqp server %s: %v", maskPassword(url), err)
 		errs = append(errs, err)
 	}
 	return nil, errors.Join(errs...)
+}
+
+func maskPassword(urlToMask string) string {
+	parsedUrl, _ := url.Parse(urlToMask)
+	return parsedUrl.Redacted()
 }
 
 // NewConnectionManager creates a new connection manager
