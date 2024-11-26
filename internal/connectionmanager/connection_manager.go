@@ -43,8 +43,6 @@ func dial(log logger.Logger, resolver Resolver, conf amqp.Config) (*amqp.Connect
 		if err == nil {
 			return conn, err
 		}
-
-		// Log masked url
 		log.Warnf("failed to connect to amqp server %s: %v", maskPassword(url), err)
 		errs = append(errs, err)
 	}
