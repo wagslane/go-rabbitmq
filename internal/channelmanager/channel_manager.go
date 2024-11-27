@@ -21,10 +21,11 @@ type ChannelManager struct {
 	reconnectionCount   uint
 	reconnectionCountMu *sync.Mutex
 	dispatcher          *dispatcher.Dispatcher
+	inConfirmMode       bool
 }
 
 // NewChannelManager creates a new connection manager
-func NewChannelManager(connManager *connectionmanager.ConnectionManager, log logger.Logger, reconnectInterval time.Duration) (*ChannelManager, error) {
+func NewChannelManager(connManager *connectionmanager.ConnectionManager, confirmMode bool, log logger.Logger, reconnectInterval time.Duration) (*ChannelManager, error) {
 	ch, err := getNewChannel(connManager)
 	if err != nil {
 		return nil, err
@@ -39,6 +40,7 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 		reconnectionCount:   0,
 		reconnectionCountMu: &sync.Mutex{},
 		dispatcher:          dispatcher.NewDispatcher(),
+		inConfirmMode:       confirmMode,
 	}
 	go chanManager.startNotifyCancelOrClosed()
 	return &chanManager, nil
@@ -118,6 +120,12 @@ func (chanManager *ChannelManager) reconnect() error {
 	newChannel, err := getNewChannel(chanManager.connManager)
 	if err != nil {
 		return err
+	}
+	// chaneel creating and setting confirm mode should be in the same mutex Lock interval
+	if chanManager.inConfirmMode {
+		if err = newChannel.Confirm(false); err != nil {
+			return err
+		}
 	}
 
 	if err = chanManager.channel.Close(); err != nil {
