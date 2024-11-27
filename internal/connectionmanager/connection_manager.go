@@ -171,3 +171,11 @@ func (connManager *ConnectionManager) reconnect() error {
 	connManager.connection = conn
 	return nil
 }
+
+// IsClosed checks if the connection is closed
+func (connManager *ConnectionManager) IsClosed() bool {
+	connManager.connectionMu.Lock()
+	defer connManager.connectionMu.Unlock()
+
+	return connManager.connection.IsClosed()
+}
