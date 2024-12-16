@@ -23,6 +23,13 @@ type ConnectionManager struct {
 	reconnectionCount   uint
 	reconnectionCountMu *sync.Mutex
 	dispatcher          *dispatcher.Dispatcher
+
+	// universalNotifyBlockingReceiver receives block signal from underlying
+	// connection which are broadcasted to all publisherNotifyBlockingReceivers
+	universalNotifyBlockingReceiver     chan amqp.Blocking
+	universalNotifyBlockingReceiverUsed bool
+	publisherNotifyBlockingReceiversMu  *sync.RWMutex
+	publisherNotifyBlockingReceivers    []chan amqp.Blocking
 }
 
 type Resolver interface {
@@ -62,17 +69,20 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 	}
 
 	connManager := ConnectionManager{
-		logger:              log,
-		resolver:            resolver,
-		connection:          conn,
-		amqpConfig:          conf,
-		connectionMu:        &sync.RWMutex{},
-		ReconnectInterval:   reconnectInterval,
-		reconnectionCount:   0,
-		reconnectionCountMu: &sync.Mutex{},
-		dispatcher:          dispatcher.NewDispatcher(),
+		logger:                             log,
+		resolver:                           resolver,
+		connection:                         conn,
+		amqpConfig:                         conf,
+		connectionMu:                       &sync.RWMutex{},
+		ReconnectInterval:                  reconnectInterval,
+		reconnectionCount:                  0,
+		reconnectionCountMu:                &sync.Mutex{},
+		dispatcher:                         dispatcher.NewDispatcher(),
+		universalNotifyBlockingReceiver:    make(chan amqp.Blocking),
+		publisherNotifyBlockingReceiversMu: &sync.RWMutex{},
 	}
 	go connManager.startNotifyClose()
+	go connManager.readUniversalBlockReceiver()
 	return &connManager, nil
 }
 
