@@ -58,6 +58,8 @@ type Publisher struct {
 	notifyPublishHandler func(p Confirmation)
 
 	options PublisherOptions
+
+	blockings chan amqp.Blocking
 }
 
 type PublisherConfirmation []*amqp.DeferredConfirmation
@@ -286,6 +288,7 @@ func (publisher *Publisher) Close() {
 		publisher.options.Logger.Warnf("error while closing the channel: %v", err)
 	}
 	publisher.options.Logger.Infof("closing publisher...")
+	publisher.connManager.RemovePublisherBlockingReceiver(publisher.blockings)
 	go func() {
 		publisher.closeConnectionToManagerCh <- struct{}{}
 	}()
