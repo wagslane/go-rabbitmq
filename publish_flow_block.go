@@ -26,6 +26,7 @@ func (publisher *Publisher) startNotifyFlowHandler() {
 func (publisher *Publisher) startNotifyBlockedHandler() {
 	blockings := publisher.connManager.NotifyBlockedSafe(make(chan amqp.Blocking))
 	publisher.disablePublishDueToBlockedMu.Lock()
+	publisher.blockings = blockings
 	publisher.disablePublishDueToBlocked = false
 	publisher.disablePublishDueToBlockedMu.Unlock()
 
