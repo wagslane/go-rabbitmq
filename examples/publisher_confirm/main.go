@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	rabbitmq "github.com/wagslane/go-rabbitmq"
+	"github.com/wagslane/go-rabbitmq"
 )
 
 func main() {
@@ -36,6 +36,10 @@ func main() {
 
 	publisher.NotifyReturn(func(r rabbitmq.Return) {
 		log.Printf("message returned from server: %s", string(r.Body))
+	})
+
+	publisher.NotifyPublishWithReturn(func(p rabbitmq.Confirmation, r rabbitmq.Return) {
+		log.Printf("message confirmed and returned from server: %s, deliveryTag=%d, ACK=%v", string(r.Body), p.DeliveryTag, p.Ack)
 	})
 
 	// block main thread - wait for shutdown signal

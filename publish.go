@@ -53,9 +53,10 @@ type Publisher struct {
 	disablePublishDueToBlocked   bool
 	disablePublishDueToBlockedMu *sync.RWMutex
 
-	handlerMu            *sync.Mutex
-	notifyReturnHandler  func(r Return)
-	notifyPublishHandler func(p Confirmation)
+	handlerMu                      *sync.Mutex
+	notifyReturnHandler            func(r Return)
+	notifyPublishHandler           func(p Confirmation)
+	notifyPublishWithReturnHandler func(p Confirmation, r Return)
 
 	options PublisherOptions
 }
@@ -121,6 +122,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 			}
 			publisher.startReturnHandler()
 			publisher.startPublishHandler()
+			publisher.startPublishWithReturnHandler()
 		}
 	}()
 
@@ -320,6 +322,40 @@ func (publisher *Publisher) NotifyPublish(handler func(p Confirmation)) {
 	}
 }
 
+// NotifyPublishWithReturn registers a listener for publish confirmation events with optional return information,
+// delivered in the correct order according to RabbitMQ protocol. Must set ConfirmPublishings option.
+// These notifications are shared across an entire connection, so if you're creating multiple
+// publishers on the same connection keep that in mind.
+//
+// This method is particularly useful when publishing with mandatory or immediate flags, as it allows you to
+// handle both the return (if unroutable) and the associated confirmation in a single handler with proper ordering.
+//
+// Handler receives:
+//   - Confirmation: Always present for every published message (ack/nack)
+//   - Return: Only present if the message was unroutable with mandatory/immediate flags (empty Return{} otherwise)
+//
+// For successfully routed messages:
+//   - Only confirmation is received, Return will be empty
+//
+// For unrouted mandatory or immediate messages:
+//   - Return is received first (as per RabbitMQ protocol), followed immediately by confirmation
+//   - Both are delivered to the handler together in the correct pairing
+//
+// See github.com/rabbitmq/amqp091-go documentation:
+// https://pkg.go.dev/github.com/rabbitmq/amqp091-go#Channel.Confirm
+// "Unroutable mandatory or immediate messages are acknowledged immediately after any Channel.NotifyReturn
+// listeners have been notified."
+func (publisher *Publisher) NotifyPublishWithReturn(handler func(p Confirmation, r Return)) {
+	publisher.handlerMu.Lock()
+	shouldStart := publisher.notifyPublishWithReturnHandler == nil
+	publisher.notifyPublishWithReturnHandler = handler
+	publisher.handlerMu.Unlock()
+
+	if shouldStart {
+		publisher.startPublishWithReturnHandler()
+	}
+}
+
 func (publisher *Publisher) startReturnHandler() {
 	publisher.handlerMu.Lock()
 	if publisher.notifyReturnHandler == nil {
@@ -343,7 +379,11 @@ func (publisher *Publisher) startPublishHandler() {
 		return
 	}
 	publisher.handlerMu.Unlock()
-	publisher.chanManager.ConfirmSafe(false)
+	err := publisher.chanManager.ConfirmSafe(false)
+	if err != nil {
+		publisher.options.Logger.Errorf("failed to enable confirm mode for publish handler: %v", err)
+		return
+	}
 
 	go func() {
 		confirmationCh := publisher.chanManager.NotifyPublishSafe(make(chan amqp.Confirmation, 1))
@@ -352,6 +392,69 @@ func (publisher *Publisher) startPublishHandler() {
 				Confirmation:      conf,
 				ReconnectionCount: int(publisher.chanManager.GetReconnectionCount()),
 			})
+		}
+	}()
+}
+
+func (publisher *Publisher) startPublishWithReturnHandler() {
+	publisher.handlerMu.Lock()
+	if publisher.notifyPublishWithReturnHandler == nil {
+		publisher.handlerMu.Unlock()
+		return
+	}
+	publisher.handlerMu.Unlock()
+
+	// Enable confirm mode for this channel
+	err := publisher.chanManager.ConfirmSafe(false)
+	if err != nil {
+		publisher.options.Logger.Errorf("failed to enable confirm mode for return publish in order handler: %v", err)
+		return
+	}
+
+	go func() {
+		returns := publisher.chanManager.NotifyReturnSafe(make(chan amqp.Return))
+		confirmations := publisher.chanManager.NotifyPublishSafe(make(chan amqp.Confirmation))
+
+		for {
+			select {
+			case ret, ok := <-returns:
+				if !ok {
+					// returns channel closed, likely due to publisher being closed
+					publisher.options.Logger.Warnf("returns channel closed, stopping return handler")
+					returns = nil
+					continue
+				}
+
+				// According to AMQP 0.9.1 protocol, when a message is returned,
+				// the return is immediately followed by a confirmation.
+				// We must consume the next confirmation to pair with this return.
+				select {
+				case conf, ok := <-confirmations:
+					if !ok {
+						publisher.options.Logger.Warnf("confirmations channel closed while waiting for confirmation after return")
+						return
+					}
+
+					// Call handler with both return and confirmation
+					go publisher.notifyPublishWithReturnHandler(Confirmation{
+						Confirmation:      conf,
+						ReconnectionCount: int(publisher.chanManager.GetReconnectionCount()),
+					}, Return{ret})
+				}
+
+			case conf, ok := <-confirmations:
+				if !ok {
+					publisher.options.Logger.Warnf("confirmations channel closed")
+					// confirmations channel closed, likely due to publisher being closed
+					return
+				}
+
+				// This is a confirmation without a return (successful delivery)
+				go publisher.notifyPublishWithReturnHandler(Confirmation{
+					Confirmation:      conf,
+					ReconnectionCount: int(publisher.chanManager.GetReconnectionCount()),
+				}, Return{})
+			}
 		}
 	}()
 }
