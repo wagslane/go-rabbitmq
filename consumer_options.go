@@ -147,6 +147,19 @@ func WithConsumerOptionsQueueNoDeclare(options *ConsumerOptions) {
 // WithConsumerOptionsQueueArgs adds optional args to the queue
 func WithConsumerOptionsQueueArgs(args Table) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
+		if options.QueueOptions.Args != nil {
+			for k, v := range args {
+				options.QueueOptions.Args[k] = v
+			}
+		}
+
+		options.QueueOptions.Args = args
+	}
+}
+
+// WithConsumerOptionsQueueArgsOverride overrides all already set arguments
+func WithConsumerOptionsQueueArgsOverride(args Table) func(*ConsumerOptions) {
+	return func(options *ConsumerOptions) {
 		options.QueueOptions.Args = args
 	}
 }
