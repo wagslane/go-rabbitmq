@@ -102,12 +102,18 @@ func (consumer *Consumer) Run(handler Handler) error {
 
 	for err := range consumer.reconnectErrCh {
 		consumer.options.Logger.Infof("successful consumer recovery from: %v", err)
-		err = consumer.startGoroutines(
+		// If the broker crashes again between reconnect and the
+		// queue/exchange/binding declaration, startGoroutines returns
+		// an error. Don't bail out of the loop - the underlying channel
+		// manager will keep reconnecting and signal us again. Returning
+		// here used to permanently stop the consumer.
+		if err := consumer.startGoroutines(
 			handlerWrapper,
 			consumer.options,
-		)
-		if err != nil {
-			return fmt.Errorf("error restarting consumer goroutines after cancel or close: %w", err)
+		); err != nil {
+			consumer.options.Logger.Warnf(
+				"error restarting consumer goroutines after reconnect, waiting for next reconnect: %v", err,
+			)
 		}
 	}
 
