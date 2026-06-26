@@ -108,6 +108,15 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		return nil, err
 	}
 
+	// Start the flow/blocked notification handlers exactly once for the lifetime
+	// of the publisher. They self-heal across reconnections by re-subscribing on
+	// the new channel/connection, so they must NOT be (re)started from startup()
+	// (which runs again on every reconnection) or they would leak a goroutine and
+	// a registered notification channel per reconnect — eventually wedging the
+	// amqp connection reader and preventing resume on unblock (ENG-1846).
+	go publisher.startNotifyFlowHandler()
+	go publisher.startNotifyBlockedHandler()
+
 	if options.ConfirmMode {
 		publisher.NotifyPublish(func(_ Confirmation) {
 			// set a blank handler to set the channel in confirm mode
@@ -136,8 +145,6 @@ func (publisher *Publisher) startup() error {
 	if err != nil {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
-	go publisher.startNotifyFlowHandler()
-	go publisher.startNotifyBlockedHandler()
 	return nil
 }
 
