@@ -312,7 +312,8 @@ func (publisher *Publisher) Close() {
 // NotifyReturn registers a listener for basic.return methods.
 // These can be sent from the server when a publish is undeliverable either from the mandatory or immediate flags.
 // These notifications are shared across an entire connection, so if you're creating multiple
-// publishers on the same connection keep that in mind
+// publishers on the same connection keep that in mind.
+// The handler is called sequentially; a blocking handler delays subsequent returns.
 func (publisher *Publisher) NotifyReturn(handler func(r Return)) {
 	publisher.handlerMu.Lock()
 	start := publisher.notifyReturnHandler == nil
@@ -326,7 +327,8 @@ func (publisher *Publisher) NotifyReturn(handler func(r Return)) {
 
 // NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
 // These notifications are shared across an entire connection, so if you're creating multiple
-// publishers on the same connection keep that in mind
+// publishers on the same connection keep that in mind.
+// The handler is called sequentially in delivery-tag order; a blocking handler delays subsequent confirmations.
 func (publisher *Publisher) NotifyPublish(handler func(p Confirmation)) {
 	publisher.handlerMu.Lock()
 	shouldStart := publisher.notifyPublishHandler == nil
@@ -349,7 +351,10 @@ func (publisher *Publisher) startReturnHandler() {
 	go func() {
 		returns := publisher.chanManager.NotifyReturnSafe(make(chan amqp.Return, 1))
 		for ret := range returns {
-			go publisher.notifyReturnHandler(Return{ret})
+			publisher.handlerMu.Lock()
+			handler := publisher.notifyReturnHandler
+			publisher.handlerMu.Unlock()
+			handler(Return{ret})
 		}
 	}()
 }
@@ -366,7 +371,10 @@ func (publisher *Publisher) startPublishHandler() {
 	go func() {
 		confirmationCh := publisher.chanManager.NotifyPublishSafe(make(chan amqp.Confirmation, 1))
 		for conf := range confirmationCh {
-			go publisher.notifyPublishHandler(Confirmation{
+			publisher.handlerMu.Lock()
+			handler := publisher.notifyPublishHandler
+			publisher.handlerMu.Unlock()
+			handler(Confirmation{
 				Confirmation:      conf,
 				ReconnectionCount: int(publisher.chanManager.GetReconnectionCount()),
 			})
