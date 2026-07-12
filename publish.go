@@ -120,21 +120,29 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		})
 	}
 
-	go func() {
-		for err := range publisher.reconnectErrCh {
-			publisher.options.Logger.Infof("successful publisher recovery from: %v", err)
-			err := publisher.startup()
-			if err != nil {
-				publisher.options.Logger.Fatalf("error on startup for publisher after cancel or close: %v", err)
-				publisher.options.Logger.Fatalf("publisher closing, unable to recover")
-				return
-			}
-			publisher.startReturnHandler()
-			publisher.startPublishHandler()
+	go publisher.restartOnReconnect(func() error {
+		// a failed declaration closes the channel, so the channel manager
+		// will reconnect and signal us again
+		if err := publisher.startup(); err != nil {
+			return err
 		}
-	}()
+		publisher.startReturnHandler()
+		publisher.startPublishHandler()
+		return nil
+	})
 
 	return publisher, nil
+}
+
+func (publisher *Publisher) restartOnReconnect(restart func() error) {
+	for reconnectErr := range publisher.reconnectErrCh {
+		publisher.options.Logger.Infof("successful publisher recovery from: %v", reconnectErr)
+		if err := restart(); err != nil {
+			publisher.options.Logger.Errorf(
+				"error restarting publisher after reconnect, waiting for next reconnect: %v", err,
+			)
+		}
+	}
 }
 
 func (publisher *Publisher) startup() error {
