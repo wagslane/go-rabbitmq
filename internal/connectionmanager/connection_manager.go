@@ -53,7 +53,10 @@ func dial(log logger.Logger, resolver Resolver, conf amqp.Config) (*amqp.Connect
 }
 
 func maskPassword(urlToMask string) string {
-	parsedUrl, _ := url.Parse(urlToMask)
+	parsedUrl, err := url.Parse(urlToMask)
+	if err != nil {
+		return "<unparseable url redacted>"
+	}
 	return parsedUrl.Redacted()
 }
 
