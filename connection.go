@@ -59,7 +59,7 @@ func NewClusterConn(resolver Resolver, opts ...func(*ConnectionOptions)) (*Conn,
 		optFn(options)
 	}
 
-	manager, err := connectionmanager.NewConnectionManager(resolver, amqp.Config(options.Config), options.Logger, options.ReconnectInterval)
+	manager, err := connectionmanager.NewConnectionManager(resolver, amqp.Config(options.Config), options.Logger, options.BaseReconnectInterval)
 	if err != nil {
 		return nil, err
 	}

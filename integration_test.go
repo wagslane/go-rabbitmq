@@ -191,7 +191,7 @@ func TestPublisherCloseReleasesBlockedHandler(t *testing.T) {
 
 func TestPublisherRestoresConfirmModeBeforeReconnectCompletes(t *testing.T) {
 	connStr := prepareDockerTest(t)
-	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(10*time.Millisecond))
+	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsBaseReconnectInterval(10*time.Millisecond))
 	defer conn.Close()
 
 	tests := []struct {
@@ -357,7 +357,7 @@ func TestConnCloseDuringReconnectStaysClosed(t *testing.T) {
 	}
 
 	brokerID := runBroker()
-	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(100*time.Millisecond))
+	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsBaseReconnectInterval(100*time.Millisecond))
 
 	if err := exec.Command("docker", "rm", "--force", brokerID).Run(); err != nil {
 		t.Fatal("failed to kill broker", err)
@@ -374,7 +374,7 @@ func TestConnCloseDuringReconnectStaysClosed(t *testing.T) {
 	_ = conn.Close()
 
 	runBroker()
-	healthy := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(100*time.Millisecond))
+	healthy := waitForHealthyAmqp(t, connStr, WithConnectionOptionsBaseReconnectInterval(100*time.Millisecond))
 	defer healthy.Close()
 
 	// give the closed connection's reconnect loop time to (wrongly) reconnect
