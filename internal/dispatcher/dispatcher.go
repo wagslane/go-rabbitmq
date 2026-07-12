@@ -1,17 +1,14 @@
 package dispatcher
 
 import (
-	"log"
-	"math"
-	"math/rand/v2"
 	"sync"
-	"time"
 )
 
-// Dispatcher -
+// Dispatcher fans out reconnect notifications to subscribers
 type Dispatcher struct {
-	subscribers   map[int]dispatchSubscriber
-	subscribersMu *sync.Mutex
+	subscribers      map[uint64]dispatchSubscriber
+	subscribersMu    *sync.Mutex
+	nextSubscriberID uint64
 }
 
 type dispatchSubscriber struct {
@@ -22,20 +19,27 @@ type dispatchSubscriber struct {
 // NewDispatcher -
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		subscribers:   make(map[int]dispatchSubscriber),
+		subscribers:   make(map[uint64]dispatchSubscriber),
 		subscribersMu: &sync.Mutex{},
 	}
 }
 
-// Dispatch -
+// Dispatch sends the error to all subscribers without blocking.
+// A subscriber that hasn't consumed its previous notification only keeps
+// the latest one; restart logic re-reads current state, so intermediate
+// notifications are safe to coalesce.
 func (d *Dispatcher) Dispatch(err error) error {
 	d.subscribersMu.Lock()
 	defer d.subscribersMu.Unlock()
 	for _, subscriber := range d.subscribers {
 		select {
-		case <-time.After(time.Second * 5):
-			log.Println("Unexpected rabbitmq error: timeout in dispatch")
 		case subscriber.notifyCancelOrCloseChan <- err:
+		default:
+			select {
+			case <-subscriber.notifyCancelOrCloseChan:
+			default:
+			}
+			subscriber.notifyCancelOrCloseChan <- err
 		}
 	}
 	return nil
@@ -43,19 +47,19 @@ func (d *Dispatcher) Dispatch(err error) error {
 
 // AddSubscriber -
 func (d *Dispatcher) AddSubscriber() (<-chan error, chan<- struct{}) {
-	id := rand.IntN(math.MaxInt)
-
 	closeCh := make(chan struct{})
-	notifyCancelOrCloseChan := make(chan error)
+	notifyCancelOrCloseChan := make(chan error, 1)
 
 	d.subscribersMu.Lock()
+	id := d.nextSubscriberID
+	d.nextSubscriberID++
 	d.subscribers[id] = dispatchSubscriber{
 		notifyCancelOrCloseChan: notifyCancelOrCloseChan,
 		closeCh:                 closeCh,
 	}
 	d.subscribersMu.Unlock()
 
-	go func(id int) {
+	go func(id uint64) {
 		<-closeCh
 		d.subscribersMu.Lock()
 		defer d.subscribersMu.Unlock()

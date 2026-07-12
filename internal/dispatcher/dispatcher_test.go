@@ -1,6 +1,7 @@
 package dispatcher
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -37,5 +38,33 @@ func TestCloseSubscriber(t *testing.T) {
 	defer d.subscribersMu.Unlock()
 	if len(d.subscribers) != 0 {
 		t.Error("Dispatcher subscribers length is not 0")
+	}
+}
+
+func TestDispatchDoesNotBlockOnSlowSubscriber(t *testing.T) {
+	d := NewDispatcher()
+	notifyCh, _ := d.AddSubscriber()
+
+	done := make(chan struct{})
+	go func() {
+		d.Dispatch(errors.New("first"))
+		d.Dispatch(errors.New("second"))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("dispatch blocked on a slow subscriber")
+	}
+
+	// a slow subscriber keeps the latest notification
+	select {
+	case err := <-notifyCh:
+		if err.Error() != "second" {
+			t.Fatalf("got %q, want latest notification %q", err, "second")
+		}
+	default:
+		t.Fatal("expected a buffered notification")
 	}
 }
