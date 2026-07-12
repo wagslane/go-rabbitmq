@@ -21,6 +21,7 @@ type ChannelManager struct {
 	reconnectionCount   uint
 	reconnectionCountMu *sync.Mutex
 	dispatcher          *dispatcher.Dispatcher
+	confirmMode         bool
 }
 
 // NewChannelManager creates a new connection manager
@@ -119,7 +120,12 @@ func (chanManager *ChannelManager) reconnect() error {
 	if err != nil {
 		return err
 	}
-
+	if chanManager.confirmMode {
+		if err = newChannel.Confirm(false); err != nil {
+			_ = newChannel.Close()
+			return err
+		}
+	}
 	if err = chanManager.channel.Close(); err != nil {
 		chanManager.logger.Warnf("error closing channel while reconnecting: %v", err)
 	}

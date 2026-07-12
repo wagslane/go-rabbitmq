@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func prepareDockerTest(t *testing.T) (connStr string) {
 	return "amqp://guest:guest@localhost:5672/"
 }
 
-func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
+func waitForHealthyAmqp(t *testing.T, connStr string, optionFuncs ...func(*ConnectionOptions)) *Conn {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	tkr := time.NewTicker(time.Second)
@@ -56,7 +57,8 @@ func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
 			return nil
 		case <-tkr.C:
 			t.Log("attempting connection")
-			conn, err := NewConn(connStr, WithConnectionOptionsLogger(connLogger))
+			options := append(optionFuncs, WithConnectionOptionsLogger(connLogger))
+			conn, err := NewConn(connStr, options...)
 			if err != nil {
 				lastErr = err
 				t.Log("connection attempt failed - retrying")
@@ -67,6 +69,7 @@ func waitForHealthyAmqp(t *testing.T, connStr string) *Conn {
 						return fmt.Errorf("failed to setup publisher: %v", err)
 					}
 					t.Log("attempting publish")
+					defer pub.Close()
 					return pub.PublishWithContext(ctx, []byte{}, []string{"ping"}, WithPublishOptionsExchange(""))
 				}(); err != nil {
 					_ = conn.Close()
@@ -179,5 +182,62 @@ func TestPublisherCloseReleasesBlockedHandler(t *testing.T) {
 
 	if err := activePublisher.Publish([]byte("still connected"), []string{"unused"}); err != nil {
 		t.Fatalf("second publisher failed after first publisher closed: %v", err)
+	}
+}
+
+func TestPublisherRestoresConfirmModeBeforeReconnectCompletes(t *testing.T) {
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(10*time.Millisecond))
+	defer conn.Close()
+
+	tests := []struct {
+		name    string
+		options []func(*PublisherOptions)
+		dynamic bool
+	}{
+		{name: "configured", options: []func(*PublisherOptions){WithPublisherOptionsConfirm}},
+		{name: "dynamic", dynamic: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			publisher, err := NewPublisher(conn, test.options...)
+			if err != nil {
+				t.Fatal("error creating publisher", err)
+			}
+			defer publisher.Close()
+			if test.dynamic {
+				publisher.NotifyPublish(func(Confirmation) {})
+			}
+
+			for i := 0; i < 3; i++ {
+				reconnectionCount := publisher.chanManager.GetReconnectionCount()
+				_ = publisher.Publish(
+					[]byte("close channel"),
+					[]string{"unused"},
+					WithPublishOptionsExchange(fmt.Sprintf("missing-%d", i)),
+				)
+
+				deadline := time.Now().Add(2 * time.Second)
+				for publisher.chanManager.GetReconnectionCount() == reconnectionCount {
+					if time.Now().After(deadline) {
+						t.Fatal("timed out waiting for channel reconnect")
+					}
+					runtime.Gosched()
+				}
+
+				confirmations, err := publisher.PublishWithDeferredConfirmWithContext(
+					context.Background(),
+					[]byte("confirmed"),
+					[]string{"unused"},
+				)
+				if err != nil {
+					t.Fatal("publish after reconnect failed", err)
+				}
+				if len(confirmations) != 1 || confirmations[0] == nil {
+					t.Fatal("reconnected channel was published before confirm mode was restored")
+				}
+			}
+		})
 	}
 }
