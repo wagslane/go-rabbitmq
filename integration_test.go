@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -42,10 +43,12 @@ func waitForHealthyAmqp(t *testing.T, connStr string, optionFuncs ...func(*Conne
 	defer cancel()
 	tkr := time.NewTicker(time.Second)
 
-	// only log connection-level logs when connection has succeeded
-	muted := true
+	// only log connection-level logs when connection has succeeded;
+	// atomic because connection goroutines log concurrently with the test
+	var muted atomic.Bool
+	muted.Store(true)
 	connLogger := simpleLogF(func(s string, i ...interface{}) {
-		if !muted {
+		if !muted.Load() {
 			t.Logf(s, i...)
 		}
 	})
@@ -77,7 +80,7 @@ func waitForHealthyAmqp(t *testing.T, connStr string, optionFuncs ...func(*Conne
 					t.Log("publish ping failed", err.Error())
 				} else {
 					t.Log("ping successful")
-					muted = true
+					muted.Store(true)
 					return conn
 				}
 			}
@@ -329,4 +332,56 @@ func TestNotifyPublishSurfacesConfirmError(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected a confirm mode error to be logged, got logs: %q", logs)
+}
+
+// TestConnCloseDuringReconnectStaysClosed closes a connection while its
+// reconnect loop is dialing a dead broker, then brings the broker back:
+// the closed connection must never reconnect.
+func TestConnCloseDuringReconnectStaysClosed(t *testing.T) {
+	if v, ok := os.LookupEnv(enableDockerIntegrationTestsFlag); !ok || strings.ToUpper(v) != "TRUE" {
+		t.Skipf("integration tests are only run if '%s' is TRUE", enableDockerIntegrationTestsFlag)
+	}
+	const hostPort = "5673"
+	connStr := fmt.Sprintf("amqp://guest:guest@localhost:%s/", hostPort)
+
+	runBroker := func() string {
+		out, err := exec.Command("docker", "run", "--rm", "--detach", "--publish="+hostPort+":5672", "--quiet", "--", "rabbitmq:4.1.1-alpine").Output()
+		if err != nil {
+			t.Fatalf("error launching rabbitmq in docker: %v", err)
+		}
+		id := strings.TrimSpace(string(out))
+		t.Cleanup(func() {
+			_ = exec.Command("docker", "rm", "--force", id).Run()
+		})
+		return id
+	}
+
+	brokerID := runBroker()
+	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(100*time.Millisecond))
+
+	if err := exec.Command("docker", "rm", "--force", brokerID).Run(); err != nil {
+		t.Fatal("failed to kill broker", err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for !conn.IsClosed() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for connection to notice dead broker")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// the reconnect loop is now dialing a dead broker
+	_ = conn.Close()
+
+	runBroker()
+	healthy := waitForHealthyAmqp(t, connStr, WithConnectionOptionsReconnectInterval(100*time.Millisecond))
+	defer healthy.Close()
+
+	// give the closed connection's reconnect loop time to (wrongly) reconnect
+	for range 20 {
+		if !conn.IsClosed() {
+			t.Fatal("closed connection reconnected to the restarted broker")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }

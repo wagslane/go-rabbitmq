@@ -22,7 +22,12 @@ type ChannelManager struct {
 	reconnectionCountMu *sync.Mutex
 	dispatcher          *dispatcher.Dispatcher
 	confirmMode         bool
+	done                chan struct{}
 }
+
+// errManagerClosed signals the reconnect loop that the manager was
+// deliberately closed and reconnecting should stop
+var errManagerClosed = errors.New("channel manager is closed")
 
 // NewChannelManager creates a new connection manager
 func NewChannelManager(connManager *connectionmanager.ConnectionManager, log logger.Logger, reconnectInterval time.Duration) (*ChannelManager, error) {
@@ -40,6 +45,7 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 		reconnectionCount:   0,
 		reconnectionCountMu: &sync.Mutex{},
 		dispatcher:          dispatcher.NewDispatcher(),
+		done:                make(chan struct{}),
 	}
 	go chanManager.startNotifyCancelOrClosed()
 	return &chanManager, nil
@@ -100,8 +106,15 @@ func (chanManager *ChannelManager) incrementReconnectionCount() {
 func (chanManager *ChannelManager) reconnectLoop() {
 	for {
 		chanManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", chanManager.reconnectInterval)
-		time.Sleep(chanManager.reconnectInterval)
+		select {
+		case <-chanManager.done:
+			return
+		case <-time.After(chanManager.reconnectInterval):
+		}
 		err := chanManager.reconnect()
+		if errors.Is(err, errManagerClosed) {
+			return
+		}
 		if err != nil {
 			chanManager.logger.Errorf("error reconnecting to amqp server: %v", err)
 		} else {
@@ -116,6 +129,13 @@ func (chanManager *ChannelManager) reconnectLoop() {
 func (chanManager *ChannelManager) reconnect() error {
 	chanManager.channelMu.Lock()
 	defer chanManager.channelMu.Unlock()
+
+	select {
+	case <-chanManager.done:
+		return errManagerClosed
+	default:
+	}
+
 	newChannel, err := getNewChannel(chanManager.connManager)
 	if err != nil {
 		return err
@@ -140,12 +160,13 @@ func (chanManager *ChannelManager) Close() error {
 	chanManager.channelMu.Lock()
 	defer chanManager.channelMu.Unlock()
 
-	err := chanManager.channel.Close()
-	if err != nil {
-		return err
+	select {
+	case <-chanManager.done:
+	default:
+		close(chanManager.done)
 	}
 
-	return nil
+	return chanManager.channel.Close()
 }
 
 // NotifyReconnect adds a new subscriber that will receive error messages whenever
