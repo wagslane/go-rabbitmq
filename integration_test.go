@@ -297,3 +297,36 @@ func TestPublisherConfirmationsInOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestNotifyPublishSurfacesConfirmError(t *testing.T) {
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr)
+	defer conn.Close()
+
+	var logMu sync.Mutex
+	var logs []string
+	logger := simpleLogF(func(format string, args ...interface{}) {
+		logMu.Lock()
+		defer logMu.Unlock()
+		logs = append(logs, fmt.Sprintf(format, args...))
+	})
+
+	publisher, err := NewPublisher(conn, WithPublisherOptionsLogger(logger))
+	if err != nil {
+		t.Fatal("error creating publisher", err)
+	}
+
+	// confirm mode can't be established on the closed channel
+	publisher.Close()
+
+	publisher.NotifyPublish(func(Confirmation) {})
+
+	logMu.Lock()
+	defer logMu.Unlock()
+	for _, line := range logs {
+		if strings.Contains(line, "could not put channel in confirm mode") {
+			return
+		}
+	}
+	t.Fatalf("expected a confirm mode error to be logged, got logs: %q", logs)
+}

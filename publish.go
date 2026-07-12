@@ -115,8 +115,11 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 	go publisher.startNotifyBlockedHandler()
 
 	if options.ConfirmMode {
+		if err := publisher.chanManager.ConfirmSafe(false); err != nil {
+			return nil, fmt.Errorf("could not put channel in confirm mode: %w", err)
+		}
 		publisher.NotifyPublish(func(_ Confirmation) {
-			// set a blank handler to set the channel in confirm mode
+			// set a blank handler to start the confirmation listener
 		})
 	}
 
@@ -374,7 +377,14 @@ func (publisher *Publisher) startPublishHandler() {
 		return
 	}
 	publisher.handlerMu.Unlock()
-	publisher.chanManager.ConfirmSafe(false)
+
+	if err := publisher.chanManager.ConfirmSafe(false); err != nil {
+		// the channel manager will reconnect and start this handler again
+		publisher.options.Logger.Errorf(
+			"could not put channel in confirm mode, confirmations disabled until next reconnect: %v", err,
+		)
+		return
+	}
 
 	go func() {
 		confirmationCh := publisher.chanManager.NotifyPublishSafe(make(chan amqp.Confirmation, 1))
