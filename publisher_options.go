@@ -87,10 +87,19 @@ func WithPublisherOptionsExchangePassive(options *PublisherOptions) {
 	options.ExchangeOptions.Passive = true
 }
 
-// WithPublisherOptionsExchangeArgs adds optional args to the exchange
+// WithPublisherOptionsExchangeArgs adds optional args to the exchange.
+//
+// Merges onto any args already set on the exchange so callers can
+// stack options without the order silently overwriting earlier
+// settings. See #206 for the consumer-side analogue.
 func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
-		options.ExchangeOptions.Args = args
+		if options.ExchangeOptions.Args == nil {
+			options.ExchangeOptions.Args = Table{}
+		}
+		for k, v := range args {
+			options.ExchangeOptions.Args[k] = v
+		}
 	}
 }
 

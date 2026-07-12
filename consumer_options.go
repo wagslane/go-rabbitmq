@@ -144,10 +144,21 @@ func WithConsumerOptionsQueueNoDeclare(options *ConsumerOptions) {
 	options.QueueOptions.Declare = false
 }
 
-// WithConsumerOptionsQueueArgs adds optional args to the queue
+// WithConsumerOptionsQueueArgs adds optional args to the queue.
+//
+// If queue args were already set (for example by an earlier
+// WithConsumerOptionsQueueQuorum or WithConsumerOptionsQueueMessageExpiration)
+// the new args are merged onto the existing map rather than replacing
+// it. Earlier code replaced the whole map, so the order options were
+// passed in silently changed the resulting queue type. See #206.
 func WithConsumerOptionsQueueArgs(args Table) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
-		options.QueueOptions.Args = args
+		if options.QueueOptions.Args == nil {
+			options.QueueOptions.Args = Table{}
+		}
+		for k, v := range args {
+			options.QueueOptions.Args[k] = v
+		}
 	}
 }
 
