@@ -206,9 +206,14 @@ func (chanManager *ChannelManager) ConfirmSafe(
 	chanManager.channelMu.Lock()
 	defer chanManager.channelMu.Unlock()
 
-	return chanManager.channel.Confirm(
-		noWait,
-	)
+	if chanManager.confirmMode {
+		return nil
+	}
+	if err := chanManager.channel.Confirm(noWait); err != nil {
+		return err
+	}
+	chanManager.confirmMode = true
+	return nil
 }
 
 // NotifyPublishSafe safely wraps the (*amqp.Channel).NotifyPublish method
