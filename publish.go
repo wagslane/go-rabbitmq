@@ -52,6 +52,11 @@ type Publisher struct {
 
 	disablePublishDueToBlocked   bool
 	disablePublishDueToBlockedMu *sync.RWMutex
+	blockedNotifications         <-chan amqp.Blocking
+	unsubscribeBlocked           func()
+	done                         chan struct{}
+	blockedHandlerDone           chan struct{}
+	closeOnce                    *sync.Once
 
 	handlerMu            *sync.Mutex
 	notifyReturnHandler  func(r Return)
@@ -93,6 +98,9 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		disablePublishDueToFlowMu:    &sync.RWMutex{},
 		disablePublishDueToBlocked:   false,
 		disablePublishDueToBlockedMu: &sync.RWMutex{},
+		done:                         make(chan struct{}),
+		blockedHandlerDone:           make(chan struct{}),
+		closeOnce:                    &sync.Once{},
 		handlerMu:                    &sync.Mutex{},
 		notifyReturnHandler:          nil,
 		notifyPublishHandler:         nil,
@@ -103,6 +111,8 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 	if err != nil {
 		return nil, err
 	}
+	publisher.blockedNotifications, publisher.unsubscribeBlocked = publisher.connManager.SubscribeBlocked()
+	go publisher.startNotifyBlockedHandler()
 
 	if options.ConfirmMode {
 		publisher.NotifyPublish(func(_ Confirmation) {
@@ -133,7 +143,6 @@ func (publisher *Publisher) startup() error {
 		return fmt.Errorf("declare exchange failed: %w", err)
 	}
 	go publisher.startNotifyFlowHandler()
-	go publisher.startNotifyBlockedHandler()
 	return nil
 }
 
@@ -279,16 +288,21 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 // The publisher should be discarded as it's not safe for re-use
 // Only call Close() once
 func (publisher *Publisher) Close() {
-	// close the channel so that rabbitmq server knows that the
-	// publisher has been stopped.
-	err := publisher.chanManager.Close()
-	if err != nil {
-		publisher.options.Logger.Warnf("error while closing the channel: %v", err)
-	}
-	publisher.options.Logger.Infof("closing publisher...")
-	go func() {
-		publisher.closeConnectionToManagerCh <- struct{}{}
-	}()
+	publisher.closeOnce.Do(func() {
+		close(publisher.done)
+		publisher.unsubscribeBlocked()
+
+		// close the channel so that rabbitmq server knows that the
+		// publisher has been stopped.
+		err := publisher.chanManager.Close()
+		if err != nil {
+			publisher.options.Logger.Warnf("error while closing the channel: %v", err)
+		}
+		publisher.options.Logger.Infof("closing publisher...")
+		go func() {
+			publisher.closeConnectionToManagerCh <- struct{}{}
+		}()
+	})
 }
 
 // NotifyReturn registers a listener for basic.return methods.

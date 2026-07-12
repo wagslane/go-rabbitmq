@@ -154,3 +154,30 @@ func TestSimplePubSub(t *testing.T) {
 		}
 	}
 }
+
+func TestPublisherCloseReleasesBlockedHandler(t *testing.T) {
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr)
+	defer conn.Close()
+
+	closedPublisher, err := NewPublisher(conn, WithPublisherOptionsLogger(simpleLogF(t.Logf)))
+	if err != nil {
+		t.Fatal("error creating publisher", err)
+	}
+	activePublisher, err := NewPublisher(conn, WithPublisherOptionsLogger(simpleLogF(t.Logf)))
+	if err != nil {
+		t.Fatal("error creating second publisher", err)
+	}
+	defer activePublisher.Close()
+
+	closedPublisher.Close()
+	select {
+	case <-closedPublisher.blockedHandlerDone:
+	case <-time.After(time.Second):
+		t.Fatal("publisher blocked handler did not stop after close")
+	}
+
+	if err := activePublisher.Publish([]byte("still connected"), []string{"unused"}); err != nil {
+		t.Fatalf("second publisher failed after first publisher closed: %v", err)
+	}
+}
