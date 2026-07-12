@@ -220,11 +220,17 @@ func WithConsumerOptionsExchangePassive(options *ConsumerOptions) {
 	options.ExchangeOptions[0].Passive = true
 }
 
-// WithConsumerOptionsExchangeArgs adds optional args to the exchange
+// WithConsumerOptionsExchangeArgs adds optional args to the exchange,
+// merging onto any args already set
 func WithConsumerOptionsExchangeArgs(args Table) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
 		ensureExchangeOptions(options)
-		options.ExchangeOptions[0].Args = args
+		if options.ExchangeOptions[0].Args == nil {
+			options.ExchangeOptions[0].Args = Table{}
+		}
+		for k, v := range args {
+			options.ExchangeOptions[0].Args[k] = v
+		}
 	}
 }
 
