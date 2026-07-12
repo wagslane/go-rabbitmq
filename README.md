@@ -99,6 +99,18 @@ if err != nil {
 }
 ```
 
+### Publishing outcomes
+
+A successful `Publish` call means the message was written without an immediate client error. It does not guarantee that a queue received the message.
+
+RabbitMQ reports different failures through different mechanisms:
+
+* Publishing to a missing exchange closes the AMQP channel with a 404 error. The publish call may complete before that asynchronous channel error arrives, after which this library begins channel recovery.
+* `WithPublishOptionsMandatory` applies only when the target exchange exists but cannot route the message to a queue. RabbitMQ reports that outcome asynchronously through `NotifyReturn`; it is not returned as a `Publish` error.
+* Publisher confirms report whether RabbitMQ accepted responsibility for a publication. A mandatory, unroutable message is returned before RabbitMQ sends its confirmation, so receiving an acknowledgement does not mean the message was routed.
+
+If the exchange must already exist, configure the publisher with `WithPublisherOptionsExchangeDeclare` and `WithPublisherOptionsExchangePassive`. `NewPublisher` will then fail if the exchange does not exist. Applications correlating returns and confirms across multiple in-flight messages should set a unique message or correlation ID and treat `NotifyReturn` and `NotifyPublish` as separate asynchronous event streams.
+
 ## Other usage examples
 
 See the [examples](examples) directory for more ideas.
