@@ -25,9 +25,16 @@ func TestAddSubscriber(t *testing.T) {
 
 func TestCloseSubscriber(t *testing.T) {
 	d := NewDispatcher()
-	_, closeCh := d.AddSubscriber()
+	notifyCh, closeCh := d.AddSubscriber()
 	close(closeCh)
-	time.Sleep(time.Millisecond)
+	select {
+	case <-notifyCh:
+	case <-time.After(time.Second):
+		t.Fatal("Subscriber notification channel was not closed")
+	}
+
+	d.subscribersMu.Lock()
+	defer d.subscribersMu.Unlock()
 	if len(d.subscribers) != 0 {
 		t.Error("Dispatcher subscribers length is not 0")
 	}
