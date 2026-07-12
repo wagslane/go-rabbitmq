@@ -14,15 +14,18 @@ import (
 
 // ConnectionManager -
 type ConnectionManager struct {
-	logger              logger.Logger
-	resolver            Resolver
-	connection          *amqp.Connection
-	amqpConfig          amqp.Config
-	connectionMu        *sync.RWMutex
-	ReconnectInterval   time.Duration
-	reconnectionCount   uint
-	reconnectionCountMu *sync.Mutex
-	dispatcher          *dispatcher.Dispatcher
+	logger                  logger.Logger
+	resolver                Resolver
+	connection              *amqp.Connection
+	amqpConfig              amqp.Config
+	connectionMu            *sync.RWMutex
+	ReconnectInterval       time.Duration
+	reconnectionCount       uint
+	reconnectionCountMu     *sync.Mutex
+	dispatcher              *dispatcher.Dispatcher
+	blockedSubscribers      map[uint64]chan amqp.Blocking
+	blockedSubscribersMu    *sync.Mutex
+	nextBlockedSubscriberID uint64
 }
 
 type Resolver interface {
@@ -62,17 +65,20 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 	}
 
 	connManager := ConnectionManager{
-		logger:              log,
-		resolver:            resolver,
-		connection:          conn,
-		amqpConfig:          conf,
-		connectionMu:        &sync.RWMutex{},
-		ReconnectInterval:   reconnectInterval,
-		reconnectionCount:   0,
-		reconnectionCountMu: &sync.Mutex{},
-		dispatcher:          dispatcher.NewDispatcher(),
+		logger:               log,
+		resolver:             resolver,
+		connection:           conn,
+		amqpConfig:           conf,
+		connectionMu:         &sync.RWMutex{},
+		ReconnectInterval:    reconnectInterval,
+		reconnectionCount:    0,
+		reconnectionCountMu:  &sync.Mutex{},
+		dispatcher:           dispatcher.NewDispatcher(),
+		blockedSubscribers:   make(map[uint64]chan amqp.Blocking),
+		blockedSubscribersMu: &sync.Mutex{},
 	}
 	go connManager.startNotifyClose()
+	connManager.startNotifyBlocked(conn)
 	return &connManager, nil
 }
 
@@ -169,6 +175,7 @@ func (connManager *ConnectionManager) reconnect() error {
 	}
 
 	connManager.connection = conn
+	connManager.startNotifyBlocked(conn)
 	return nil
 }
 
