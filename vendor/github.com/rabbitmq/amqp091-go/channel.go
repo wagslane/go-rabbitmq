@@ -7,9 +7,12 @@ package amqp091
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // 0      1         3             7                  size+7 size+8
@@ -26,10 +29,11 @@ exchange.  Errors on methods with this Channel as a receiver means this channel
 should be discarded and a new channel established.
 */
 type Channel struct {
-	destructor sync.Once
-	m          sync.Mutex // struct field mutex
-	confirmM   sync.Mutex // publisher confirms state mutex
-	notifyM    sync.RWMutex
+	destructorM sync.Mutex   // Mutex for destroying the channel.
+	destructed  bool         // Will be true if the channel has been destroyed, false otherwise.
+	m           sync.Mutex   // Mutex for the channel.
+	confirmM    sync.Mutex   // Mutex for the publisher confirms state.
+	notifyM     sync.RWMutex // Mutex for the notify state.
 
 	connection *Connection
 
@@ -38,8 +42,8 @@ type Channel struct {
 
 	id uint16
 
-	// closed is set to 1 when the channel has been closed - see Channel.send()
-	closed int32
+	// closed is set to true when the channel has been closed - see Channel.send()
+	closed atomic.Bool
 	close  chan struct{}
 
 	// true when we will never notify again
@@ -74,6 +78,11 @@ type Channel struct {
 	message messageWithContent
 	header  *headerFrame
 	body    []byte
+
+	reconnecting sync.Mutex // Mutex for reconnecting channel.
+	lifeCycle    *lifeCycle // The current state of the channel.
+
+	recoveryCancels []chan struct{} // listeners for channel recovery cancellation
 }
 
 // Constructs a new channel with the given framing rules
@@ -87,12 +96,13 @@ func newChannel(c *Connection, id uint16) *Channel {
 		recv:       (*Channel).recvMethod,
 		errors:     make(chan *Error, 1),
 		close:      make(chan struct{}),
+		lifeCycle:  newLifeCycle(),
 	}
 }
 
 // Signal that from now on, Channel.send() should call Channel.sendClosed()
 func (ch *Channel) setClosed() {
-	atomic.StoreInt32(&ch.closed, 1)
+	ch.closed.Store(true)
 }
 
 // shutdown is called by Connection after the channel has been removed from the
@@ -100,23 +110,48 @@ func (ch *Channel) setClosed() {
 func (ch *Channel) shutdown(e *Error) {
 	ch.setClosed()
 
-	ch.destructor.Do(func() {
-		ch.m.Lock()
-		defer ch.m.Unlock()
+	ch.destructorM.Lock()
+	if ch.destructed {
+		ch.destructorM.Unlock()
+		return
+	}
+	ch.destructed = true
+	defer ch.destructorM.Unlock()
 
-		// Grab an exclusive lock for the notify channels
-		ch.notifyM.Lock()
-		defer ch.notifyM.Unlock()
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-		// Broadcast abnormal shutdown
-		if e != nil {
-			for _, c := range ch.closes {
-				c <- e
+	// Grab an exclusive lock for the notify channels
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
+
+	// Broadcast abnormal shutdown
+	if e != nil {
+		for _, c := range ch.closes {
+			select {
+			case c <- e:
+			default:
+				// If blocked/full, send in a goroutine so we never deadlock the shutdown sequence
+				go func(c chan *Error, e *Error) {
+					defer func() {
+						_ = recover() // Gracefully ignore panics if the channel is closed concurrently
+					}()
+					select {
+					case c <- e:
+					case <-time.After(5 * time.Second):
+						// Give up to avoid leaking the goroutine permanently
+					}
+				}(c, e)
 			}
-			// Notify RPC if we're selecting
-			ch.errors <- e
 		}
+		// Notify RPC if we're selecting
+		select {
+		case ch.errors <- e:
+		default:
+		}
+	}
 
+	if e == nil || !ch.connection.IsRecoveryEnabled() || !ch.connection.isRecoverable(e) {
 		ch.consumers.close()
 
 		for _, c := range ch.closes {
@@ -149,7 +184,16 @@ func (ch *Channel) shutdown(e *Error) {
 		close(ch.errors)
 		close(ch.close)
 		ch.noNotify = true
-	})
+
+		var err error
+		if e != nil {
+			err = fmt.Errorf("%w", e) // preserve the original error type for assertions
+		}
+		ch.lifeCycle.SetState(StateClosed, err)
+	} else {
+		close(ch.errors)
+		close(ch.close)
+	}
 }
 
 // send calls Channel.sendOpen() during normal operation.
@@ -307,7 +351,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		// Note: channel state is set to closed immedately after the message is
+		// Note: channel state is set to closed immediately after the message is
 		// decoded by the Connection
 
 		// lock before sending connection.close-ok
@@ -474,9 +518,13 @@ code set to '200'.
 It is safe to call this method multiple times.
 */
 func (ch *Channel) Close() error {
+	ch.closeRecovery() // Stop any active recovery process
+
 	if ch.IsClosed() {
 		return nil
 	}
+
+	ch.lifeCycle.SetState(StateClosing, nil)
 
 	defer ch.connection.closeChannel(ch, nil)
 	return ch.call(
@@ -488,7 +536,15 @@ func (ch *Channel) Close() error {
 // IsClosed returns true if the channel is marked as closed, otherwise false
 // is returned.
 func (ch *Channel) IsClosed() bool {
-	return atomic.LoadInt32(&ch.closed) == 1
+	return ch.closed.Load()
+}
+
+// NotifyStateChange registers a listener for state changes.
+//
+// It is necessary to continuously consume from the channel passed to NotifyStateChange
+// to avoid blocking internal state dispatch routines and leaking goroutines.
+func (ch *Channel) NotifyStateChange(c chan *StateChanged) {
+	ch.lifeCycle.notifyStateChange(c)
 }
 
 /*
@@ -515,6 +571,37 @@ func (ch *Channel) NotifyClose(c chan *Error) chan *Error {
 	}
 
 	return c
+}
+
+/*
+NotifyRecoveryCancel registers a listener that is notified (via a channel close)
+when channel recovery has been canceled or aborted (for example, when Close()
+is called during an active channel reconnect process).
+*/
+func (ch *Channel) NotifyRecoveryCancel(receiver chan struct{}) chan struct{} {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
+	state := ch.lifeCycle.State()
+	if state == StateClosing || state == StateClosed {
+		close(receiver)
+	} else {
+		ch.recoveryCancels = append(ch.recoveryCancels, receiver)
+	}
+
+	return receiver
+}
+
+// closeRecovery stops any active channel recovery process by notifying
+// and closing all recovery cancellation listeners.
+func (ch *Channel) closeRecovery() {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
+	for _, listener := range ch.recoveryCancels {
+		close(listener)
+	}
+	ch.recoveryCancels = nil
 }
 
 /*
@@ -926,8 +1013,7 @@ exchange and queue, the attempt to rebind will be ignored and the existing
 binding will be retained.
 
 In the case that multiple bindings may cause the message to be routed to the
-same queue, the server will only route the publishing once.  This is possible
-with topic exchanges.
+same queue, the server will route the publishing to all queues that match.
 
 	QueueBind("pagers", "alert", "amq.topic", false, nil)
 	QueueBind("emails", "info", "amq.topic", false, nil)
@@ -936,6 +1022,7 @@ with topic exchanges.
 	Delivery       Exchange        Key       Queue
 	-----------------------------------------------
 	key: alert --> amq.topic ----> alert --> pagers
+	                         \---> # ------> emails
 	key: info ---> amq.topic ----> # ------> emails
 	                         \---> info ---/
 	key: debug --> amq.topic ----> # ------> emails
@@ -1124,7 +1211,16 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 
 	deliveries := make(chan Delivery)
 
-	ch.consumers.add(consumer, deliveries)
+	config := consumerConfig{
+		Queue:     queue,
+		Consumer:  consumer,
+		AutoAck:   autoAck,
+		Exclusive: exclusive,
+		NoLocal:   noLocal,
+		NoWait:    noWait,
+		Args:      args,
+	}
+	ch.consumers.add(consumer, deliveries, config)
 
 	if err := ch.call(req, res); err != nil {
 		ch.consumers.cancel(consumer)
@@ -1228,7 +1324,16 @@ func (ch *Channel) ConsumeWithContext(ctx context.Context, queue, consumer strin
 
 	deliveries := make(chan Delivery)
 
-	ch.consumers.add(consumer, deliveries)
+	config := consumerConfig{
+		Queue:     queue,
+		Consumer:  consumer,
+		AutoAck:   autoAck,
+		Exclusive: exclusive,
+		NoLocal:   noLocal,
+		NoWait:    noWait,
+		Args:      args,
+	}
+	ch.consumers.add(consumer, deliveries, config)
 
 	if err := ch.call(req, res); err != nil {
 		ch.consumers.cancel(consumer)
@@ -1492,7 +1597,10 @@ func (ch *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 /*
 PublishWithContext sends a Publishing from the client to an exchange on the server.
 
-NOTE: this function is equivalent to [Channel.Publish]. Context is not honoured.
+If the context is already cancelled when PublishWithContext is called, it
+returns the context error immediately without attempting to publish.  Context
+cancellation after the call has started does not interrupt an in-flight
+Publish, as the underlying I/O is not context-aware.
 
 When you want a single message to be delivered to a single queue, you can
 publish to the default exchange with the routingKey of the queue name.  This is
@@ -1523,8 +1631,13 @@ confirmations start at 1.  Exit when all publishings are confirmed.
 When Publish does not return an error and the channel is in confirm mode, the
 internal counter for DeliveryTags with the first confirmation starts at 1.
 */
-func (ch *Channel) PublishWithContext(_ context.Context, exchange, key string, mandatory, immediate bool, msg Publishing) error {
-	return ch.Publish(exchange, key, mandatory, immediate, msg)
+func (ch *Channel) PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg Publishing) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return ch.Publish(exchange, key, mandatory, immediate, msg)
+	}
 }
 
 /*
@@ -1583,11 +1696,18 @@ DeferredConfirmation, allowing the caller to wait on the publisher confirmation
 for this message. If the channel has not been put into confirm mode,
 the DeferredConfirmation will be nil.
 
-NOTE: PublishWithDeferredConfirmWithContext is equivalent to its non-context variant. The context passed
-to this function is not honoured.
+If the context is already cancelled when PublishWithDeferredConfirmWithContext is called, it
+returns the context error immediately without attempting to publish.  Context
+cancellation after the call has started does not interrupt an in-flight
+PublishWithDeferredConfirm, as the underlying I/O is not context-aware.
 */
-func (ch *Channel) PublishWithDeferredConfirmWithContext(_ context.Context, exchange, key string, mandatory, immediate bool, msg Publishing) (*DeferredConfirmation, error) {
-	return ch.PublishWithDeferredConfirm(exchange, key, mandatory, immediate, msg)
+func (ch *Channel) PublishWithDeferredConfirmWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg Publishing) (*DeferredConfirmation, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return ch.PublishWithDeferredConfirm(exchange, key, mandatory, immediate, msg)
+	}
 }
 
 /*
@@ -1790,7 +1910,7 @@ it must be redelivered or dropped.
 
 See also Delivery.Nack
 */
-func (ch *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
+func (ch *Channel) Nack(tag uint64, multiple, requeue bool) error {
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
@@ -1825,4 +1945,198 @@ func (ch *Channel) GetNextPublishSeqNo() uint64 {
 	defer ch.confirms.publishedMut.Unlock()
 
 	return ch.confirms.published + 1
+}
+
+// cleanup closes all the channels and the confirms.
+func (ch *Channel) cleanup() {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
+
+	ch.consumers.close()
+
+	for _, c := range ch.closes {
+		close(c)
+	}
+
+	for _, c := range ch.flows {
+		close(c)
+	}
+
+	for _, c := range ch.returns {
+		close(c)
+	}
+
+	for _, c := range ch.cancels {
+		close(c)
+	}
+
+	for _, c := range ch.recoveryCancels {
+		close(c)
+	}
+
+	ch.recoveryCancels = nil
+	ch.flows = nil
+	ch.closes = nil
+	ch.returns = nil
+	ch.cancels = nil
+
+	if ch.confirms != nil {
+		ch.confirms.Close()
+	}
+
+	ch.noNotify = true
+}
+
+// watchChannel watches the channel for close events and triggers recovery if needed.
+func (ch *Channel) watchChannel() {
+	errCh := ch.NotifyClose(make(chan *Error, 1))
+	go func() {
+		for err := range errCh {
+			if err != nil {
+				Logger.Printf("Channel %d closed unexpectedly: %v", ch.id, err)
+				if ch.connection.Config.Recovery != nil && ch.connection.Config.Recovery.ConnectionRecovery != nil {
+					ch.connection.Config.Recovery.ConnectionRecovery.OnChannelClose(ch, err)
+				}
+			}
+		}
+	}()
+}
+
+// Reconnect initiates automatic channel recovery,
+// re-opens the AMQP channel with the same channel id and configuration,
+// and re-establishes all active publisher confirmations and consumer subscriptions.
+func (ch *Channel) Reconnect() error {
+	if !ch.connection.IsRecoveryEnabled() {
+		return ErrClosed
+	}
+
+	ch.reconnecting.Lock()
+	defer ch.reconnecting.Unlock()
+
+	if !ch.IsClosed() {
+		return nil
+	}
+
+	ch.lifeCycle.SetState(StateReconnecting, nil)
+
+	cancelCh := ch.NotifyRecoveryCancel(make(chan struct{}))
+
+	var err error
+	for i := 0; i < ch.connection.MaxRetryCount(); i++ {
+		// Exit early if Close() was already called
+		select {
+		case <-cancelCh:
+			Logger.Printf("Channel %d recovery aborted: channel closed.", ch.id)
+			return ErrClosed
+		default:
+		}
+
+		Logger.Printf("Channel %d recovery attempt %d of %d", ch.id, i+1, ch.connection.MaxRetryCount())
+		if i > 0 {
+			jitter := time.Duration(rand.Intn(500)) * time.Millisecond // Random 500ms jitter to avoid thundering herd
+
+			// Wait with select to allow immediate interruption of sleep
+			select {
+			case <-cancelCh:
+				Logger.Printf("Channel %d recovery aborted: channel closed during backoff.", ch.id)
+				return ErrClosed
+			case <-time.After(ch.connection.RetryInterval() + jitter):
+			}
+		}
+
+		// 1. Reset client-side state
+		// Reset state under locks to ensure atomicity and prevent data races.
+		// Acquiring destructorM -> m avoids any lock ordering deadlocks.
+		ch.destructorM.Lock()
+		ch.m.Lock()
+		ch.resetState()
+		ch.m.Unlock()
+		ch.destructorM.Unlock()
+
+		// 2. Open a fresh channel on the broker
+		if err = ch.open(); err != nil {
+			Logger.Printf("Channel %d recovery open error: %v", ch.id, err)
+			continue
+		}
+
+		// 3. Perform setup steps. If ANY step fails, we close the channel and retry.
+		if err = ch.setupChannel(); err != nil {
+			Logger.Printf("Channel %d setup failed: %v, closing and retrying...", ch.id, err)
+			ch.setClosed() // Marks closed locally
+			// Send channel.close to the broker so it knows this channel is defunct
+			_ = ch.call(&channelClose{ReplyCode: replySuccess, ReplyText: "Recovery retry"}, &channelCloseOk{})
+			continue
+		}
+
+		// If we reached here, recovery was 100% successful!
+		Logger.Printf("Channel %d recovery successful", ch.id)
+		ch.lifeCycle.SetState(StateOpen, nil)
+		return nil
+	}
+
+	Logger.Printf("Channel %d recovery exhausted all %d retries", ch.id, ch.connection.MaxRetryCount())
+	ch.setClosed()
+	ch.lifeCycle.SetState(StateClosed, err)
+	return err
+}
+
+// setupChannel performs all channel-level setup steps sequentially.
+// If any of these fail, we return the error immediately so the reconnect loop can try a new channel.
+func (ch *Channel) setupChannel() error {
+	var err error
+	// TODO Re-enable QoS if it was tracked
+
+	// Re-enable confirms if needed
+	if ch.confirming {
+		if err = ch.Confirm(false); err != nil {
+			Logger.Printf("Channel %d recovery Confirm error: %v", ch.id, err)
+			return err
+		}
+	}
+
+	// TODO Recover Topology (Exchanges, Queues, Bindings) here
+
+	// Re-subscribe consumers
+	ch.consumers.Lock()
+	configs := make(map[string]consumerConfig, len(ch.consumers.configs))
+	for tag, config := range ch.consumers.configs {
+		configs[tag] = config
+	}
+	ch.consumers.Unlock()
+	for tag, config := range configs {
+		req := &basicConsume{
+			Queue:       config.Queue,
+			ConsumerTag: tag,
+			NoLocal:     config.NoLocal,
+			NoAck:       config.AutoAck,
+			Exclusive:   config.Exclusive,
+			NoWait:      config.NoWait,
+			Arguments:   config.Args,
+		}
+		res := &basicConsumeOk{}
+		if err = ch.call(req, res); err != nil {
+			Logger.Printf("Channel %d recovery consume error for tag %s: %v", ch.id, tag, err)
+			return err
+		}
+	}
+	return nil
+}
+
+// resetState clears the shutdown flags and re-initializes the internal
+// channels so the AMQP channel can be reused after a successful reconnection.
+// The caller must hold ch.destructorM and ch.m.
+func (ch *Channel) resetState() {
+	ch.closed.Store(false)
+	ch.destructed = false
+
+	ch.errors = make(chan *Error, 1)
+	ch.close = make(chan struct{})
+	ch.rpc = make(chan message)
+
+	if ch.confirms != nil {
+		ch.confirms.reset()
+	}
 }

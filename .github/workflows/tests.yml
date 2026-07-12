@@ -13,14 +13,14 @@ jobs:
       ENABLE_DOCKER_INTEGRATION_TESTS: TRUE
 
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: "1.22"
-        id: go
-
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+        id: go
 
       - name: install staticcheck
         run: |
