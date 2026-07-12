@@ -1,6 +1,10 @@
 package rabbitmq
 
-import amqp "github.com/rabbitmq/amqp091-go"
+import (
+	"maps"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+)
 
 // Table stores user supplied fields of the following types:
 //
@@ -33,9 +37,7 @@ import amqp "github.com/rabbitmq/amqp091-go"
 type Table map[string]interface{}
 
 func tableToAMQPTable(table Table) amqp.Table {
-	new := amqp.Table{}
-	for k, v := range table {
-		new[k] = v
-	}
-	return new
+	amqpTable := make(amqp.Table, len(table))
+	maps.Copy(amqpTable, table)
+	return amqpTable
 }

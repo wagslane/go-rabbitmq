@@ -1,7 +1,8 @@
 package rabbitmq
 
 import (
-	"math/rand"
+	"math/rand/v2"
+	"slices"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -32,9 +33,7 @@ type StaticResolver struct {
 }
 
 func (r *StaticResolver) Resolve() ([]string, error) {
-	// TODO: move to slices.Clone when supported Go versions > 1.21
-	var urls []string
-	urls = append(urls, r.urls...)
+	urls := slices.Clone(r.urls)
 
 	if r.shuffle {
 		rand.Shuffle(len(urls), func(i, j int) {
