@@ -25,14 +25,13 @@ func WithConnectionOptionsReconnectInterval(interval time.Duration) func(options
 	}
 }
 
-// WithConnectionOptionsLogging sets logging to true on the consumer options
-// and sets the
+// WithConnectionOptionsLogging uses a default logger that writes to std out
 func WithConnectionOptionsLogging(options *ConnectionOptions) {
 	options.Logger = stdDebugLogger{}
 }
 
-// WithConnectionOptionsLogger sets logging to true on the consumer options
-// and sets the
+// WithConnectionOptionsLogger sets logging to a custom interface.
+// Use WithConnectionOptionsLogging to just log to stdout.
 func WithConnectionOptionsLogger(log Logger) func(options *ConnectionOptions) {
 	return func(options *ConnectionOptions) {
 		options.Logger = log

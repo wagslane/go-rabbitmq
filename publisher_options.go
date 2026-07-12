@@ -29,8 +29,7 @@ func getDefaultPublisherOptions() PublisherOptions {
 	}
 }
 
-// WithPublisherOptionsLogging sets logging to true on the publisher options
-// and sets the
+// WithPublisherOptionsLogging uses a default logger that writes to std out
 func WithPublisherOptionsLogging(options *PublisherOptions) {
 	options.Logger = &stdDebugLogger{}
 }
@@ -50,7 +49,7 @@ func WithPublisherOptionsExchangeName(name string) func(*PublisherOptions) {
 	}
 }
 
-// WithPublisherOptionsExchangeKind ensures the queue is a durable queue
+// WithPublisherOptionsExchangeKind sets the exchange kind, i.e. direct, topic, fanout, or headers
 func WithPublisherOptionsExchangeKind(kind string) func(*PublisherOptions) {
 	return func(options *PublisherOptions) {
 		options.ExchangeOptions.Kind = kind
