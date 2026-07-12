@@ -2,9 +2,35 @@ package channelmanager
 
 import (
 	"context"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+func (chanManager *ChannelManager) lockChannelRead(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	if chanManager.channelMu.TryRLock() {
+		return nil
+	}
+
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if chanManager.channelMu.TryRLock() {
+				return nil
+			}
+		}
+	}
+}
 
 // ConsumeSafe safely wraps the (*amqp.Channel).Consume method
 func (chanManager *ChannelManager) ConsumeSafe(
@@ -158,7 +184,9 @@ func (chanManager *ChannelManager) PublishSafe(
 func (chanManager *ChannelManager) PublishWithContextSafe(
 	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) error {
-	chanManager.channelMu.RLock()
+	if err := chanManager.lockChannelRead(ctx); err != nil {
+		return err
+	}
 	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.PublishWithContext(
@@ -174,7 +202,9 @@ func (chanManager *ChannelManager) PublishWithContextSafe(
 func (chanManager *ChannelManager) PublishWithDeferredConfirmWithContextSafe(
 	ctx context.Context, exchange string, key string, mandatory bool, immediate bool, msg amqp.Publishing,
 ) (*amqp.DeferredConfirmation, error) {
-	chanManager.channelMu.RLock()
+	if err := chanManager.lockChannelRead(ctx); err != nil {
+		return nil, err
+	}
 	defer chanManager.channelMu.RUnlock()
 
 	return chanManager.channel.PublishWithDeferredConfirmWithContext(
