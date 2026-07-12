@@ -158,6 +158,8 @@ func (publisher *Publisher) Publish(
 }
 
 // PublishWithContext publishes the provided data to the given routing keys over the connection.
+// Context cancellation interrupts waiting for a channel that is reconnecting. Once an AMQP write
+// begins, the underlying amqp091-go client cannot interrupt it through context cancellation.
 func (publisher *Publisher) PublishWithContext(
 	ctx context.Context,
 	data []byte,
@@ -217,11 +219,13 @@ func (publisher *Publisher) PublishWithContext(
 	return nil
 }
 
-// PublishWithContext publishes the provided data to the given routing keys over the connection.
-// if the publisher is in confirm mode (which can be either done by calling `NotifyPublish` with a custom handler
+// PublishWithDeferredConfirmWithContext publishes the provided data to the given routing keys over the connection.
+// If the publisher is in confirm mode (which can be either done by calling `NotifyPublish` with a custom handler
 // or by using `WithPublisherOptionsConfirm`) a publisher confirmation is returned.
 // This confirmation can be used to check if the message was actually published or wait for this to happen.
 // If the publisher is not in confirm mode, the returned confirmation will always be nil.
+// Context cancellation interrupts waiting for a channel that is reconnecting, but cannot interrupt
+// an AMQP write after it begins.
 func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 	ctx context.Context,
 	data []byte,
