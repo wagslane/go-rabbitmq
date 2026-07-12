@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -239,5 +240,60 @@ func TestPublisherRestoresConfirmModeBeforeReconnectCompletes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPublisherConfirmationsInOrder(t *testing.T) {
+	const messageCount = 50
+
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr)
+	defer conn.Close()
+
+	publisher, err := NewPublisher(conn, WithPublisherOptionsLogger(simpleLogF(t.Logf)), WithPublisherOptionsConfirm)
+	if err != nil {
+		t.Fatal("error creating publisher", err)
+	}
+	defer publisher.Close()
+
+	var tagsMu sync.Mutex
+	var tags []uint64
+	collect := func(c Confirmation) {
+		tagsMu.Lock()
+		tags = append(tags, c.DeliveryTag)
+		tagsMu.Unlock()
+	}
+	publisher.NotifyPublish(collect)
+
+	for i := 0; i < messageCount; i++ {
+		if i == messageCount/2 {
+			// swap the handler while confirmations are in flight
+			publisher.NotifyPublish(collect)
+		}
+		if err := publisher.Publish([]byte("ordered"), []string{"unrouted"}); err != nil {
+			t.Fatal("publish failed", err)
+		}
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		tagsMu.Lock()
+		count := len(tags)
+		tagsMu.Unlock()
+		if count >= messageCount {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for confirmations: got %d of %d", count, messageCount)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	tagsMu.Lock()
+	defer tagsMu.Unlock()
+	for i := 1; i < len(tags); i++ {
+		if tags[i] <= tags[i-1] {
+			t.Fatalf("confirmations out of order at index %d: tag %d after tag %d", i, tags[i], tags[i-1])
+		}
 	}
 }
