@@ -140,6 +140,36 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 	return publisher, nil
 }
 
+func buildPublishOptions(optionFuncs []func(*PublishOptions)) *PublishOptions {
+	options := &PublishOptions{}
+	for _, optionFunc := range optionFuncs {
+		optionFunc(options)
+	}
+	if options.DeliveryMode == 0 {
+		options.DeliveryMode = Transient
+	}
+	return options
+}
+
+func buildPublishing(options *PublishOptions, data []byte) amqp.Publishing {
+	return amqp.Publishing{
+		ContentType:     options.ContentType,
+		DeliveryMode:    options.DeliveryMode,
+		Body:            data,
+		Headers:         tableToAMQPTable(options.Headers),
+		Expiration:      options.Expiration,
+		ContentEncoding: options.ContentEncoding,
+		Priority:        options.Priority,
+		CorrelationId:   options.CorrelationID,
+		ReplyTo:         options.ReplyTo,
+		MessageId:       options.MessageID,
+		Timestamp:       options.Timestamp,
+		Type:            options.Type,
+		UserId:          options.UserID,
+		AppId:           options.AppID,
+	}
+}
+
 func (publisher *Publisher) restartOnReconnect(restart func() error) {
 	for reconnectErr := range publisher.reconnectErrCh {
 		publisher.options.Logger.Infof("successful publisher recovery from: %v", reconnectErr)
@@ -187,32 +217,10 @@ func (publisher *Publisher) PublishWithContext(
 		return ErrPublishBlocked
 	}
 
-	options := &PublishOptions{}
-	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
-	}
-	if options.DeliveryMode == 0 {
-		options.DeliveryMode = Transient
-	}
+	options := buildPublishOptions(optionFuncs)
+	message := buildPublishing(options, data)
 
 	for _, routingKey := range routingKeys {
-		message := amqp.Publishing{}
-		message.ContentType = options.ContentType
-		message.DeliveryMode = options.DeliveryMode
-		message.Body = data
-		message.Headers = tableToAMQPTable(options.Headers)
-		message.Expiration = options.Expiration
-		message.ContentEncoding = options.ContentEncoding
-		message.Priority = options.Priority
-		message.CorrelationId = options.CorrelationID
-		message.ReplyTo = options.ReplyTo
-		message.MessageId = options.MessageID
-		message.Timestamp = options.Timestamp
-		message.Type = options.Type
-		message.UserId = options.UserID
-		message.AppId = options.AppID
-
-		// Actual publish.
 		err := publisher.chanManager.PublishWithContextSafe(
 			ctx,
 			options.Exchange,
@@ -248,34 +256,12 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 		return nil, ErrPublishBlocked
 	}
 
-	options := &PublishOptions{}
-	for _, optionFunc := range optionFuncs {
-		optionFunc(options)
-	}
-	if options.DeliveryMode == 0 {
-		options.DeliveryMode = Transient
-	}
+	options := buildPublishOptions(optionFuncs)
+	message := buildPublishing(options, data)
 
 	var deferredConfirmations []*amqp.DeferredConfirmation
 
 	for _, routingKey := range routingKeys {
-		message := amqp.Publishing{}
-		message.ContentType = options.ContentType
-		message.DeliveryMode = options.DeliveryMode
-		message.Body = data
-		message.Headers = tableToAMQPTable(options.Headers)
-		message.Expiration = options.Expiration
-		message.ContentEncoding = options.ContentEncoding
-		message.Priority = options.Priority
-		message.CorrelationId = options.CorrelationID
-		message.ReplyTo = options.ReplyTo
-		message.MessageId = options.MessageID
-		message.Timestamp = options.Timestamp
-		message.Type = options.Type
-		message.UserId = options.UserID
-		message.AppId = options.AppID
-
-		// Actual publish.
 		conf, err := publisher.chanManager.PublishWithDeferredConfirmWithContextSafe(
 			ctx,
 			options.Exchange,
