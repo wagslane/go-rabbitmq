@@ -8,6 +8,7 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq/internal/backoff"
 	"github.com/wagslane/go-rabbitmq/internal/dispatcher"
 	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
@@ -19,7 +20,7 @@ type ConnectionManager struct {
 	connection              *amqp.Connection
 	amqpConfig              amqp.Config
 	connectionMu            *sync.RWMutex
-	ReconnectInterval       time.Duration
+	BaseReconnectInterval   time.Duration
 	reconnectionCount       uint
 	reconnectionCountMu     *sync.Mutex
 	dispatcher              *dispatcher.Dispatcher
@@ -66,25 +67,25 @@ func maskPassword(urlToMask string) string {
 }
 
 // NewConnectionManager creates a new connection manager
-func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
+func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger, baseReconnectInterval time.Duration) (*ConnectionManager, error) {
 	conn, err := dial(log, resolver, amqp.Config(conf))
 	if err != nil {
 		return nil, err
 	}
 
 	connManager := ConnectionManager{
-		logger:               log,
-		resolver:             resolver,
-		connection:           conn,
-		amqpConfig:           conf,
-		connectionMu:         &sync.RWMutex{},
-		ReconnectInterval:    reconnectInterval,
-		reconnectionCount:    0,
-		reconnectionCountMu:  &sync.Mutex{},
-		dispatcher:           dispatcher.NewDispatcher(),
-		blockedSubscribers:   make(map[uint64]chan amqp.Blocking),
-		blockedSubscribersMu: &sync.Mutex{},
-		done:                 make(chan struct{}),
+		logger:                log,
+		resolver:              resolver,
+		connection:            conn,
+		amqpConfig:            conf,
+		connectionMu:          &sync.RWMutex{},
+		BaseReconnectInterval: baseReconnectInterval,
+		reconnectionCount:     0,
+		reconnectionCountMu:   &sync.Mutex{},
+		dispatcher:            dispatcher.NewDispatcher(),
+		blockedSubscribers:    make(map[uint64]chan amqp.Blocking),
+		blockedSubscribersMu:  &sync.Mutex{},
+		done:                  make(chan struct{}),
 	}
 	go connManager.startNotifyClose()
 	connManager.startNotifyBlocked(conn)
@@ -157,12 +158,13 @@ func (connManager *ConnectionManager) incrementReconnectionCount() {
 
 // reconnectLoop continuously attempts to reconnect
 func (connManager *ConnectionManager) reconnectLoop() {
-	for {
-		connManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", connManager.ReconnectInterval)
+	for attempt := 0; ; attempt++ {
+		delay := backoff.Delay(connManager.BaseReconnectInterval, attempt)
+		connManager.logger.Infof("waiting %s to attempt to reconnect to amqp server", delay)
 		select {
 		case <-connManager.done:
 			return
-		case <-time.After(connManager.ReconnectInterval):
+		case <-time.After(delay):
 		}
 		err := connManager.reconnect()
 		if errors.Is(err, errManagerClosed) {
