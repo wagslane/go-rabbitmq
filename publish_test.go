@@ -30,3 +30,18 @@ func TestPublisherRestartContinuesAfterError(t *testing.T) {
 		t.Fatalf("restart attempts = %d, want 2", restarts)
 	}
 }
+
+func TestPublishFailsFastWhenPaused(t *testing.T) {
+	publisher := &Publisher{}
+
+	publisher.disablePublishDueToFlow.Store(true)
+	if err := publisher.Publish([]byte{}, []string{"key"}); err == nil {
+		t.Fatal("expected an error while paused due to flow")
+	}
+	publisher.disablePublishDueToFlow.Store(false)
+
+	publisher.disablePublishDueToBlocked.Store(true)
+	if err := publisher.Publish([]byte{}, []string{"key"}); err == nil {
+		t.Fatal("expected an error while paused due to TCP block")
+	}
+}
