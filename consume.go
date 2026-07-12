@@ -226,7 +226,7 @@ func (consumer *Consumer) startGoroutines(
 		return err
 	}
 
-	for i := 0; i < options.Concurrency; i++ {
+	for range options.Concurrency {
 		go handlerGoroutine(consumer, msgs, options, handler)
 	}
 	consumer.options.Logger.Infof("Processing messages on %v goroutines", options.Concurrency)
