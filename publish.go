@@ -66,6 +66,14 @@ type Publisher struct {
 
 type PublisherConfirmation []*amqp.DeferredConfirmation
 
+// ErrPublishFlowPaused is returned when publishing is paused because the
+// server requested a flow slowdown on the channel. Safe to retry later.
+var ErrPublishFlowPaused = errors.New("publishing blocked due to high flow on the server")
+
+// ErrPublishBlocked is returned when publishing is paused because the server
+// blocked the connection (e.g. a resource alarm). Safe to retry later.
+var ErrPublishBlocked = errors.New("publishing blocked due to TCP block on the server")
+
 // NewPublisher returns a new publisher with an open channel to the cluster.
 // If you plan to enforce mandatory or immediate publishing, those failures will be reported
 // on the channel of Returns that you should setup a listener on.
@@ -173,10 +181,10 @@ func (publisher *Publisher) PublishWithContext(
 	optionFuncs ...func(*PublishOptions),
 ) error {
 	if publisher.disablePublishDueToFlow.Load() {
-		return fmt.Errorf("publishing blocked due to high flow on the server")
+		return ErrPublishFlowPaused
 	}
 	if publisher.disablePublishDueToBlocked.Load() {
-		return fmt.Errorf("publishing blocked due to TCP block on the server")
+		return ErrPublishBlocked
 	}
 
 	options := &PublishOptions{}
@@ -234,10 +242,10 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 	optionFuncs ...func(*PublishOptions),
 ) (PublisherConfirmation, error) {
 	if publisher.disablePublishDueToFlow.Load() {
-		return nil, fmt.Errorf("publishing blocked due to high flow on the server")
+		return nil, ErrPublishFlowPaused
 	}
 	if publisher.disablePublishDueToBlocked.Load() {
-		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
+		return nil, ErrPublishBlocked
 	}
 
 	options := &PublishOptions{}

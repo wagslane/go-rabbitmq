@@ -35,13 +35,13 @@ func TestPublishFailsFastWhenPaused(t *testing.T) {
 	publisher := &Publisher{}
 
 	publisher.disablePublishDueToFlow.Store(true)
-	if err := publisher.Publish([]byte{}, []string{"key"}); err == nil {
-		t.Fatal("expected an error while paused due to flow")
+	if err := publisher.Publish([]byte{}, []string{"key"}); !errors.Is(err, ErrPublishFlowPaused) {
+		t.Fatalf("err = %v, want ErrPublishFlowPaused", err)
 	}
 	publisher.disablePublishDueToFlow.Store(false)
 
 	publisher.disablePublishDueToBlocked.Store(true)
-	if err := publisher.Publish([]byte{}, []string{"key"}); err == nil {
-		t.Fatal("expected an error while paused due to TCP block")
+	if err := publisher.Publish([]byte{}, []string{"key"}); !errors.Is(err, ErrPublishBlocked) {
+		t.Fatalf("err = %v, want ErrPublishBlocked", err)
 	}
 }
