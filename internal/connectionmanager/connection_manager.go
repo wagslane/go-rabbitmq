@@ -26,7 +26,12 @@ type ConnectionManager struct {
 	blockedSubscribers      map[uint64]chan amqp.Blocking
 	blockedSubscribersMu    *sync.Mutex
 	nextBlockedSubscriberID uint64
+	done                    chan struct{}
 }
+
+// errManagerClosed signals the reconnect loop that the manager was
+// deliberately closed and reconnecting should stop
+var errManagerClosed = errors.New("connection manager is closed")
 
 type Resolver interface {
 	Resolve() ([]string, error)
@@ -79,6 +84,7 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 		dispatcher:           dispatcher.NewDispatcher(),
 		blockedSubscribers:   make(map[uint64]chan amqp.Blocking),
 		blockedSubscribersMu: &sync.Mutex{},
+		done:                 make(chan struct{}),
 	}
 	go connManager.startNotifyClose()
 	connManager.startNotifyBlocked(conn)
@@ -91,11 +97,13 @@ func (connManager *ConnectionManager) Close() error {
 	connManager.connectionMu.Lock()
 	defer connManager.connectionMu.Unlock()
 
-	err := connManager.connection.Close()
-	if err != nil {
-		return err
+	select {
+	case <-connManager.done:
+	default:
+		close(connManager.done)
 	}
-	return nil
+
+	return connManager.connection.Close()
 }
 
 // NotifyReconnect adds a new subscriber that will receive error messages whenever
@@ -151,8 +159,15 @@ func (connManager *ConnectionManager) incrementReconnectionCount() {
 func (connManager *ConnectionManager) reconnectLoop() {
 	for {
 		connManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", connManager.ReconnectInterval)
-		time.Sleep(connManager.ReconnectInterval)
+		select {
+		case <-connManager.done:
+			return
+		case <-time.After(connManager.ReconnectInterval):
+		}
 		err := connManager.reconnect()
+		if errors.Is(err, errManagerClosed) {
+			return
+		}
 		if err != nil {
 			connManager.logger.Errorf("error reconnecting to amqp server: %v", err)
 		} else {
@@ -167,6 +182,12 @@ func (connManager *ConnectionManager) reconnectLoop() {
 func (connManager *ConnectionManager) reconnect() error {
 	connManager.connectionMu.Lock()
 	defer connManager.connectionMu.Unlock()
+
+	select {
+	case <-connManager.done:
+		return errManagerClosed
+	default:
+	}
 
 	conn, err := dial(connManager.logger, connManager.resolver, amqp.Config(connManager.amqpConfig))
 	if err != nil {
