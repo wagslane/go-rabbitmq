@@ -83,6 +83,9 @@ func NewConsumer(
 
 // Run starts consuming with automatic reconnection handling. Do not reuse the
 // consumer for anything other than to close it.
+// Run blocks until the consumer is closed. Recovery errors after the initial
+// startup (including permanent ones like mismatched queue args) are logged
+// and retried on the next reconnect rather than returned.
 func (consumer *Consumer) Run(handler Handler) error {
 	handlerWrapper := func(d Delivery) (action Action) {
 		if !consumer.handlerMu.TryRLock() {

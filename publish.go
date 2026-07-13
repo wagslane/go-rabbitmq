@@ -336,7 +336,9 @@ func (publisher *Publisher) NotifyReturn(handler func(r Return)) {
 	}
 }
 
-// NotifyPublish registers a listener for publish confirmations, must set ConfirmPublishings option
+// NotifyPublish registers a listener for publish confirmations.
+// Registering a handler implicitly puts the channel in confirm mode
+// (WithPublisherOptionsConfirm does the same at construction).
 // These notifications are shared across an entire connection, so if you're creating multiple
 // publishers on the same connection keep that in mind.
 // The handler is called sequentially in delivery-tag order; a blocking handler delays subsequent confirmations.

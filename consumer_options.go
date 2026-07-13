@@ -61,9 +61,8 @@ func getDefaultBindingOptions() BindingOptions {
 }
 
 // ConsumerOptions are used to describe how a new consumer will be created.
-// If QueueOptions is not nil, the options will be used to declare a queue
-// If ExchangeOptions is not nil, it will be used to declare an exchange
-// If there are Bindings, the queue will be bound to them
+// QueueOptions is used to declare the queue, ExchangeOptions to declare
+// exchanges, and each exchange's Bindings to bind the queue to it.
 type ConsumerOptions struct {
 	RabbitConsumerOptions RabbitConsumerOptions
 	QueueOptions          QueueOptions
@@ -100,7 +99,7 @@ type QueueOptions struct {
 	Declare    bool
 }
 
-// Binding describes the bhinding of a queue to a routing key on an exchange
+// Binding describes the binding of a queue to a routing key on an exchange
 type Binding struct {
 	RoutingKey string
 	BindingOptions
@@ -139,7 +138,7 @@ func WithConsumerOptionsQueuePassive(options *ConsumerOptions) {
 }
 
 // WithConsumerOptionsQueueNoDeclare will turn off the declaration of the queue's
-// existance upon startup
+// existence upon startup
 func WithConsumerOptionsQueueNoDeclare(options *ConsumerOptions) {
 	options.QueueOptions.Declare = false
 }
@@ -176,7 +175,7 @@ func WithConsumerOptionsExchangeName(name string) func(*ConsumerOptions) {
 	}
 }
 
-// WithConsumerOptionsExchangeKind ensures the queue is a durable queue
+// WithConsumerOptionsExchangeKind sets the exchange kind, i.e. direct, topic, fanout, or headers
 func WithConsumerOptionsExchangeKind(kind string) func(*ConsumerOptions) {
 	return func(options *ConsumerOptions) {
 		ensureExchangeOptions(options)
@@ -208,7 +207,7 @@ func WithConsumerOptionsExchangeNoWait(options *ConsumerOptions) {
 	options.ExchangeOptions[0].NoWait = true
 }
 
-// WithConsumerOptionsExchangeDeclare stops this library from declaring the exchanges existance
+// WithConsumerOptionsExchangeDeclare makes this library declare the exchange on startup
 func WithConsumerOptionsExchangeDeclare(options *ConsumerOptions) {
 	ensureExchangeOptions(options)
 	options.ExchangeOptions[0].Declare = true
