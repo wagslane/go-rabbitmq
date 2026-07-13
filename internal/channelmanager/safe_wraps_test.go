@@ -3,7 +3,6 @@ package channelmanager
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 )
 
 func TestLockChannelReadHonorsContext(t *testing.T) {
-	manager := &ChannelManager{channelMu: &sync.RWMutex{}}
+	manager := &ChannelManager{}
 	manager.channelMu.Lock()
 	defer manager.channelMu.Unlock()
 
@@ -29,7 +28,7 @@ func TestLockChannelReadHonorsContext(t *testing.T) {
 }
 
 func TestPublishWithContextSafeHonorsContextWhileChannelLocked(t *testing.T) {
-	manager := &ChannelManager{channelMu: &sync.RWMutex{}}
+	manager := &ChannelManager{}
 	manager.channelMu.Lock()
 	defer manager.channelMu.Unlock()
 
@@ -43,7 +42,7 @@ func TestPublishWithContextSafeHonorsContextWhileChannelLocked(t *testing.T) {
 }
 
 func TestPublishWithDeferredConfirmContextSafeHonorsContextWhileChannelLocked(t *testing.T) {
-	manager := &ChannelManager{channelMu: &sync.RWMutex{}}
+	manager := &ChannelManager{}
 	manager.channelMu.Lock()
 	defer manager.channelMu.Unlock()
 
@@ -62,7 +61,7 @@ func TestPublishWithDeferredConfirmContextSafeHonorsContextWhileChannelLocked(t 
 }
 
 func TestLockChannelReadRejectsCanceledContext(t *testing.T) {
-	manager := &ChannelManager{channelMu: &sync.RWMutex{}}
+	manager := &ChannelManager{}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 

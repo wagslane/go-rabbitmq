@@ -1,7 +1,6 @@
 package connectionmanager
 
 import (
-	"sync"
 	"testing"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -9,8 +8,7 @@ import (
 
 func newBlockedTestManager() *ConnectionManager {
 	return &ConnectionManager{
-		blockedSubscribers:   make(map[uint64]chan amqp.Blocking),
-		blockedSubscribersMu: &sync.Mutex{},
+		blockedSubscribers: make(map[uint64]chan amqp.Blocking),
 	}
 }
 

@@ -17,10 +17,10 @@ type ChannelManager struct {
 	logger                logger.Logger
 	channel               *amqp.Channel
 	connManager           *connectionmanager.ConnectionManager
-	channelMu             *sync.RWMutex
+	channelMu             sync.RWMutex
 	baseReconnectInterval time.Duration
 	reconnectionCount     uint
-	reconnectionCountMu   *sync.Mutex
+	reconnectionCountMu   sync.Mutex
 	dispatcher            *dispatcher.Dispatcher
 	confirmMode           bool
 	done                  chan struct{}
@@ -41,10 +41,8 @@ func NewChannelManager(connManager *connectionmanager.ConnectionManager, log log
 		logger:                log,
 		connManager:           connManager,
 		channel:               ch,
-		channelMu:             &sync.RWMutex{},
 		baseReconnectInterval: baseReconnectInterval,
 		reconnectionCount:     0,
-		reconnectionCountMu:   &sync.Mutex{},
 		dispatcher:            dispatcher.NewDispatcher(),
 		done:                  make(chan struct{}),
 	}

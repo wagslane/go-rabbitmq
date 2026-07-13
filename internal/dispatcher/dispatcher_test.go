@@ -11,9 +11,6 @@ func TestNewDispatcher(t *testing.T) {
 	if d.subscribers == nil {
 		t.Error("Dispatcher subscribers is nil")
 	}
-	if d.subscribersMu == nil {
-		t.Error("Dispatcher subscribersMu is nil")
-	}
 }
 
 func TestAddSubscriber(t *testing.T) {
