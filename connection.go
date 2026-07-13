@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"math/rand/v2"
 	"slices"
+	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -16,7 +17,9 @@ type Conn struct {
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 
-	options ConnectionOptions
+	options   ConnectionOptions
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Config wraps amqp.Config
@@ -84,8 +87,11 @@ func (conn *Conn) handleRestarts() {
 // You should also close any consumers and publishers before
 // closing the connection
 func (conn *Conn) Close() error {
-	conn.closeConnectionToManagerCh <- struct{}{}
-	return conn.connectionManager.Close()
+	conn.closeOnce.Do(func() {
+		conn.closeConnectionToManagerCh <- struct{}{}
+		conn.closeErr = conn.connectionManager.Close()
+	})
+	return conn.closeErr
 }
 
 // IsClosed returns whether the connection is closed or not
