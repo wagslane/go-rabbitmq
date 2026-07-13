@@ -79,3 +79,17 @@ func TestWithPublisherOptionsExchangeArgs_LaterValueWins(t *testing.T) {
 		t.Errorf("alternate-exchange = %v, want %q", got, "second")
 	}
 }
+
+func TestWithConsumerOptionsExchangeArgs_MergesWithExisting(t *testing.T) {
+	opts := &ConsumerOptions{}
+
+	WithConsumerOptionsExchangeArgs(Table{"alternate-exchange": "keep"})(opts)
+	WithConsumerOptionsExchangeArgs(Table{"x-new": "added"})(opts)
+
+	if got := opts.ExchangeOptions[0].Args["alternate-exchange"]; got != "keep" {
+		t.Errorf("alternate-exchange dropped: got %v", got)
+	}
+	if got := opts.ExchangeOptions[0].Args["x-new"]; got != "added" {
+		t.Errorf("x-new = %v, want %v", got, "added")
+	}
+}
