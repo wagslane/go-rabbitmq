@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/wagslane/go-rabbitmq/internal/channelmanager"
@@ -47,16 +48,14 @@ type Publisher struct {
 	reconnectErrCh             <-chan error
 	closeConnectionToManagerCh chan<- struct{}
 
-	disablePublishDueToFlow   bool
-	disablePublishDueToFlowMu *sync.RWMutex
+	disablePublishDueToFlow    atomic.Bool
+	disablePublishDueToBlocked atomic.Bool
 
-	disablePublishDueToBlocked   bool
-	disablePublishDueToBlockedMu *sync.RWMutex
-	blockedNotifications         <-chan amqp.Blocking
-	unsubscribeBlocked           func()
-	done                         chan struct{}
-	blockedHandlerDone           chan struct{}
-	closeOnce                    *sync.Once
+	blockedNotifications <-chan amqp.Blocking
+	unsubscribeBlocked   func()
+	done                 chan struct{}
+	blockedHandlerDone   chan struct{}
+	closeOnce            *sync.Once
 
 	handlerMu            *sync.Mutex
 	notifyReturnHandler  func(r Return)
@@ -90,21 +89,17 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 
 	reconnectErrCh, closeCh := chanManager.NotifyReconnect()
 	publisher := &Publisher{
-		chanManager:                  chanManager,
-		connManager:                  conn.connectionManager,
-		reconnectErrCh:               reconnectErrCh,
-		closeConnectionToManagerCh:   closeCh,
-		disablePublishDueToFlow:      false,
-		disablePublishDueToFlowMu:    &sync.RWMutex{},
-		disablePublishDueToBlocked:   false,
-		disablePublishDueToBlockedMu: &sync.RWMutex{},
-		done:                         make(chan struct{}),
-		blockedHandlerDone:           make(chan struct{}),
-		closeOnce:                    &sync.Once{},
-		handlerMu:                    &sync.Mutex{},
-		notifyReturnHandler:          nil,
-		notifyPublishHandler:         nil,
-		options:                      *options,
+		chanManager:                chanManager,
+		connManager:                conn.connectionManager,
+		reconnectErrCh:             reconnectErrCh,
+		closeConnectionToManagerCh: closeCh,
+		done:                       make(chan struct{}),
+		blockedHandlerDone:         make(chan struct{}),
+		closeOnce:                  &sync.Once{},
+		handlerMu:                  &sync.Mutex{},
+		notifyReturnHandler:        nil,
+		notifyPublishHandler:       nil,
+		options:                    *options,
 	}
 
 	err = publisher.startup()
@@ -177,15 +172,10 @@ func (publisher *Publisher) PublishWithContext(
 	routingKeys []string,
 	optionFuncs ...func(*PublishOptions),
 ) error {
-	publisher.disablePublishDueToFlowMu.RLock()
-	defer publisher.disablePublishDueToFlowMu.RUnlock()
-	if publisher.disablePublishDueToFlow {
+	if publisher.disablePublishDueToFlow.Load() {
 		return fmt.Errorf("publishing blocked due to high flow on the server")
 	}
-
-	publisher.disablePublishDueToBlockedMu.RLock()
-	defer publisher.disablePublishDueToBlockedMu.RUnlock()
-	if publisher.disablePublishDueToBlocked {
+	if publisher.disablePublishDueToBlocked.Load() {
 		return fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
@@ -243,15 +233,10 @@ func (publisher *Publisher) PublishWithDeferredConfirmWithContext(
 	routingKeys []string,
 	optionFuncs ...func(*PublishOptions),
 ) (PublisherConfirmation, error) {
-	publisher.disablePublishDueToFlowMu.RLock()
-	defer publisher.disablePublishDueToFlowMu.RUnlock()
-	if publisher.disablePublishDueToFlow {
+	if publisher.disablePublishDueToFlow.Load() {
 		return nil, fmt.Errorf("publishing blocked due to high flow on the server")
 	}
-
-	publisher.disablePublishDueToBlockedMu.RLock()
-	defer publisher.disablePublishDueToBlockedMu.RUnlock()
-	if publisher.disablePublishDueToBlocked {
+	if publisher.disablePublishDueToBlocked.Load() {
 		return nil, fmt.Errorf("publishing blocked due to TCP block on the server")
 	}
 
