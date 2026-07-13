@@ -7,7 +7,7 @@ import (
 // Dispatcher fans out reconnect notifications to subscribers
 type Dispatcher struct {
 	subscribers      map[uint64]dispatchSubscriber
-	subscribersMu    *sync.Mutex
+	subscribersMu    sync.Mutex
 	nextSubscriberID uint64
 }
 
@@ -19,8 +19,7 @@ type dispatchSubscriber struct {
 // NewDispatcher -
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		subscribers:   make(map[uint64]dispatchSubscriber),
-		subscribersMu: &sync.Mutex{},
+		subscribers: make(map[uint64]dispatchSubscriber),
 	}
 }
 

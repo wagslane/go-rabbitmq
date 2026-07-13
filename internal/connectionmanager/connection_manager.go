@@ -19,13 +19,13 @@ type ConnectionManager struct {
 	resolver                Resolver
 	connection              *amqp.Connection
 	amqpConfig              amqp.Config
-	connectionMu            *sync.RWMutex
+	connectionMu            sync.RWMutex
 	BaseReconnectInterval   time.Duration
 	reconnectionCount       uint
-	reconnectionCountMu     *sync.Mutex
+	reconnectionCountMu     sync.Mutex
 	dispatcher              *dispatcher.Dispatcher
 	blockedSubscribers      map[uint64]chan amqp.Blocking
-	blockedSubscribersMu    *sync.Mutex
+	blockedSubscribersMu    sync.Mutex
 	nextBlockedSubscriberID uint64
 	done                    chan struct{}
 }
@@ -78,13 +78,10 @@ func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger
 		resolver:              resolver,
 		connection:            conn,
 		amqpConfig:            conf,
-		connectionMu:          &sync.RWMutex{},
 		BaseReconnectInterval: baseReconnectInterval,
 		reconnectionCount:     0,
-		reconnectionCountMu:   &sync.Mutex{},
 		dispatcher:            dispatcher.NewDispatcher(),
 		blockedSubscribers:    make(map[uint64]chan amqp.Blocking),
-		blockedSubscribersMu:  &sync.Mutex{},
 		done:                  make(chan struct{}),
 	}
 	go connManager.startNotifyClose()
