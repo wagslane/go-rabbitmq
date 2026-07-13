@@ -34,6 +34,7 @@ type Consumer struct {
 	closeConnectionToManagerCh chan<- struct{}
 	options                    ConsumerOptions
 	handlerMu                  *sync.RWMutex
+	closeOnce                  sync.Once
 
 	isClosedMu *sync.RWMutex
 	isClosed   bool
@@ -135,18 +136,18 @@ func (consumer *Consumer) restartOnReconnect(restart func() error) {
 // Use CloseWithContext to specify a context to cancel the handler completion.
 // It does not close the connection manager, just the subscription
 // to the connection manager and the consuming goroutines.
-// Only call once.
 func (consumer *Consumer) Close() {
-	if consumer.options.CloseGracefully {
-		consumer.options.Logger.Infof("waiting for handler to finish...")
-		err := consumer.waitForHandlerCompletion(context.Background())
-		if err != nil {
-			consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
+	consumer.closeOnce.Do(func() {
+		if consumer.options.CloseGracefully {
+			consumer.options.Logger.Infof("waiting for handler to finish...")
+			err := consumer.waitForHandlerCompletion(context.Background())
+			if err != nil {
+				consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
+			}
 		}
-	}
 
-	consumer.cleanupResources()
-
+		consumer.cleanupResources()
+	})
 }
 
 func (consumer *Consumer) cleanupResources() {
@@ -172,16 +173,17 @@ func (consumer *Consumer) cleanupResources() {
 // Use the context to cancel the handler completion.
 // CloseWithContext does not close the connection manager, just the subscription
 // to the connection manager and the consuming goroutines.
-// Only call once.
 func (consumer *Consumer) CloseWithContext(ctx context.Context) {
-	if consumer.options.CloseGracefully {
-		err := consumer.waitForHandlerCompletion(ctx)
-		if err != nil {
-			consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
+	consumer.closeOnce.Do(func() {
+		if consumer.options.CloseGracefully {
+			err := consumer.waitForHandlerCompletion(ctx)
+			if err != nil {
+				consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
+			}
 		}
-	}
 
-	consumer.cleanupResources()
+		consumer.cleanupResources()
+	})
 }
 
 // startGoroutines declares the queue if it doesn't exist,

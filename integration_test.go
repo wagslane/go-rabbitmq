@@ -189,6 +189,26 @@ func TestPublisherCloseReleasesBlockedHandler(t *testing.T) {
 	}
 }
 
+func TestCloseIsIdempotent(t *testing.T) {
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr)
+
+	consumer, err := NewConsumer(conn, "close_is_idempotent")
+	if err != nil {
+		t.Fatal("error creating consumer", err)
+	}
+	consumer.Close()
+	consumer.Close()
+	consumer.CloseWithContext(context.Background())
+
+	if err := conn.Close(); err != nil {
+		t.Fatal("error closing connection", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal("second connection close returned an error", err)
+	}
+}
+
 func TestPublisherRestoresConfirmModeBeforeReconnectCompletes(t *testing.T) {
 	connStr := prepareDockerTest(t)
 	conn := waitForHealthyAmqp(t, connStr, WithConnectionOptionsBaseReconnectInterval(10*time.Millisecond))
