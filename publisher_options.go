@@ -8,6 +8,9 @@ type PublisherOptions struct {
 	ExchangeOptions ExchangeOptions
 	Logger          Logger
 	ConfirmMode     bool
+	// MaxOutcomesInFlight caps how many PublishWithOutcome publishings may be
+	// awaiting their outcome at once; 0 means unlimited.
+	MaxOutcomesInFlight int
 }
 
 // getDefaultPublisherOptions describes the options that will be used when a value isn't provided
@@ -106,4 +109,14 @@ func WithPublisherOptionsExchangeArgs(args Table) func(*PublisherOptions) {
 // this is required if publisher confirmations should be used
 func WithPublisherOptionsConfirm(options *PublisherOptions) {
 	options.ConfirmMode = true
+}
+
+// WithPublisherOptionsMaxOutcomesInFlight caps how many PublishWithOutcome
+// publishings may be awaiting their outcome at once. Further publishes block
+// until earlier outcomes resolve, bounding the memory the publisher can
+// accumulate when the broker confirms slower than the application publishes.
+func WithPublisherOptionsMaxOutcomesInFlight(max int) func(*PublisherOptions) {
+	return func(options *PublisherOptions) {
+		options.MaxOutcomesInFlight = max
+	}
 }

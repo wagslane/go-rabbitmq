@@ -61,6 +61,9 @@ type Publisher struct {
 	notifyReturnHandler  func(r Return)
 	notifyPublishHandler func(p Confirmation)
 
+	outcomes     *outcomeTracker
+	outcomesOnce *sync.Once
+
 	options PublisherOptions
 }
 
@@ -104,6 +107,7 @@ func NewPublisher(conn *Conn, optionFuncs ...func(*PublisherOptions)) (*Publishe
 		done:                       make(chan struct{}),
 		blockedHandlerDone:         make(chan struct{}),
 		closeOnce:                  &sync.Once{},
+		outcomesOnce:               &sync.Once{},
 		handlerMu:                  &sync.Mutex{},
 		notifyReturnHandler:        nil,
 		notifyPublishHandler:       nil,

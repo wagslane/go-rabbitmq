@@ -41,6 +41,11 @@ type PublishOptions struct {
 	// Application or exchange specific fields,
 	// the headers exchange will inspect this field.
 	Headers Table
+	// OutcomeRef is an opaque caller value echoed back on every Outcome
+	// produced by a PublishWithOutcome call. It is never sent to the broker,
+	// unlike CorrelationID, which is an AMQP message property visible to
+	// consumers. The other publish methods ignore it.
+	OutcomeRef any
 }
 
 // WithPublishOptionsExchange returns a function that sets the exchange to publish to
@@ -152,5 +157,23 @@ func WithPublishOptionsUserID(userID string) func(*PublishOptions) {
 func WithPublishOptionsAppID(appID string) func(*PublishOptions) {
 	return func(options *PublishOptions) {
 		options.AppID = appID
+	}
+}
+
+// WithPublishOptionsOutcomeRef attaches an opaque caller value (a database key,
+// a struct pointer, the message itself) to a PublishWithOutcome call. The value
+// is returned unchanged as Outcome.Ref on every outcome of that call, one per
+// routing key and all sharing the same ref, so a failed Outcome can be mapped
+// back to the data it came from without keeping a parallel index. Use
+// Outcome.RoutingKey to tell the outcomes of one call apart, and
+// PublishOutcome.Ref to read the value before the outcome resolves.
+//
+// The value is held until the outcome resolves, so
+// WithPublisherOptionsMaxOutcomesInFlight bounds how much it can retain. It is
+// never sent to the broker, and Publish and PublishWithDeferredConfirmWithContext
+// ignore it.
+func WithPublishOptionsOutcomeRef(ref any) func(*PublishOptions) {
+	return func(options *PublishOptions) {
+		options.OutcomeRef = ref
 	}
 }

@@ -118,7 +118,6 @@ func (chanManager *ChannelManager) reconnectLoop() {
 		if err != nil {
 			chanManager.logger.Errorf("error reconnecting to amqp server: %v", err)
 		} else {
-			chanManager.incrementReconnectionCount()
 			go chanManager.startNotifyCancelOrClosed()
 			return
 		}
@@ -151,6 +150,14 @@ func (chanManager *ChannelManager) reconnect() error {
 	}
 
 	chanManager.channel = newChannel
+	// The count must advance before channelMu is released so that any
+	// operation that can reach the new channel also observes the new count.
+	// PublishWithOutcome keys its returns-listener gate on this coupling:
+	// incrementing after the unlock would let a publish go out on the new
+	// channel (which has no returns listener yet) while the count still
+	// reports the old generation, and an unroutable mandatory message
+	// published in that window would resolve as a false success.
+	chanManager.incrementReconnectionCount()
 	return nil
 }
 
