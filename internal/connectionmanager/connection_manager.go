@@ -8,6 +8,7 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/wagslane/go-rabbitmq/internal/backoff"
 	"github.com/wagslane/go-rabbitmq/internal/dispatcher"
 	"github.com/wagslane/go-rabbitmq/internal/logger"
 )
@@ -18,16 +19,19 @@ var errConnectionManagerClosed = errors.New("connection manager is closed")
 
 // ConnectionManager -
 type ConnectionManager struct {
-	logger              logger.Logger
-	resolver            Resolver
-	connection          *amqp.Connection
-	amqpConfig          amqp.Config
-	connectionMu        *sync.RWMutex
-	isClosed            bool // guarded by connectionMu
-	ReconnectInterval   time.Duration
-	reconnectionCount   uint
-	reconnectionCountMu *sync.Mutex
-	dispatcher          *dispatcher.Dispatcher
+	logger               logger.Logger
+	resolver             Resolver
+	connection           *amqp.Connection
+	amqpConfig           amqp.Config
+	connectionMu         *sync.RWMutex
+	isClosed             bool // guarded by connectionMu
+	connectedAt          time.Time
+	ReconnectInterval    time.Duration
+	ReconnectMaxInterval time.Duration
+	reconnectBackoff     *backoff.Exponential
+	reconnectionCount    uint
+	reconnectionCountMu  *sync.Mutex
+	dispatcher           *dispatcher.Dispatcher
 }
 
 type Resolver interface {
@@ -60,22 +64,25 @@ func maskPassword(urlToMask string) string {
 }
 
 // NewConnectionManager creates a new connection manager
-func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger, reconnectInterval time.Duration) (*ConnectionManager, error) {
+func NewConnectionManager(resolver Resolver, conf amqp.Config, log logger.Logger, reconnectInterval, reconnectMaxInterval time.Duration) (*ConnectionManager, error) {
 	conn, err := dial(log, resolver, amqp.Config(conf))
 	if err != nil {
 		return nil, err
 	}
 
 	connManager := ConnectionManager{
-		logger:              log,
-		resolver:            resolver,
-		connection:          conn,
-		amqpConfig:          conf,
-		connectionMu:        &sync.RWMutex{},
-		ReconnectInterval:   reconnectInterval,
-		reconnectionCount:   0,
-		reconnectionCountMu: &sync.Mutex{},
-		dispatcher:          dispatcher.NewDispatcher(),
+		logger:               log,
+		resolver:             resolver,
+		connection:           conn,
+		amqpConfig:           conf,
+		connectionMu:         &sync.RWMutex{},
+		connectedAt:          time.Now(),
+		ReconnectInterval:    reconnectInterval,
+		ReconnectMaxInterval: reconnectMaxInterval,
+		reconnectBackoff:     backoff.New(reconnectInterval, reconnectMaxInterval),
+		reconnectionCount:    0,
+		reconnectionCountMu:  &sync.Mutex{},
+		dispatcher:           dispatcher.NewDispatcher(),
 	}
 	go connManager.startNotifyClose()
 	return &connManager, nil
@@ -118,6 +125,7 @@ func (connManager *ConnectionManager) startNotifyClose() {
 	err := <-notifyCloseChan
 	if err != nil {
 		connManager.logger.Errorf("attempting to reconnect to amqp server after connection close with error: %v", err)
+		connManager.resetBackoffIfStable()
 		if !connManager.reconnectLoop() {
 			return
 		}
@@ -147,8 +155,9 @@ func (connManager *ConnectionManager) incrementReconnectionCount() {
 // must not dispatch a reconnection.
 func (connManager *ConnectionManager) reconnectLoop() bool {
 	for {
-		connManager.logger.Infof("waiting %s seconds to attempt to reconnect to amqp server", connManager.ReconnectInterval)
-		time.Sleep(connManager.ReconnectInterval)
+		wait := connManager.reconnectBackoff.Next()
+		connManager.logger.Infof("waiting %s to attempt to reconnect to amqp server", wait)
+		time.Sleep(wait)
 		err := connManager.reconnect()
 		if errors.Is(err, errConnectionManagerClosed) {
 			connManager.logger.Infof("connection manager closed, stopping reconnect loop")
@@ -185,7 +194,17 @@ func (connManager *ConnectionManager) reconnect() error {
 	}
 
 	connManager.connection = conn
+	connManager.connectedAt = time.Now()
 	return nil
+}
+
+func (connManager *ConnectionManager) resetBackoffIfStable() {
+	connManager.connectionMu.RLock()
+	stable := time.Since(connManager.connectedAt) >= connManager.ReconnectMaxInterval
+	connManager.connectionMu.RUnlock()
+	if stable {
+		connManager.reconnectBackoff.Reset()
+	}
 }
 
 // IsClosed checks if the connection is closed

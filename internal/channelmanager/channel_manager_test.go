@@ -51,7 +51,7 @@ func prepareDockerTest(t *testing.T) (connStr string) {
 func waitForConnectionManager(t *testing.T, connStr string) *connectionmanager.ConnectionManager {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		connManager, err := connectionmanager.NewConnectionManager(staticResolver{connStr}, amqp.Config{}, testLogger{t}, time.Second)
+		connManager, err := connectionmanager.NewConnectionManager(staticResolver{connStr}, amqp.Config{}, testLogger{t}, time.Second, time.Second)
 		if err == nil {
 			return connManager
 		}
@@ -72,7 +72,7 @@ func TestCloseDuringReconnectStopsReconnectLoop(t *testing.T) {
 	defer connManager.Close()
 
 	reconnectInterval := 500 * time.Millisecond
-	chanManager, err := NewChannelManager(connManager, testLogger{t}, reconnectInterval)
+	chanManager, err := NewChannelManager(connManager, testLogger{t}, reconnectInterval, reconnectInterval)
 	if err != nil {
 		t.Fatalf("error creating channel manager: %v", err)
 	}

@@ -4,17 +4,19 @@ import "time"
 
 // ConnectionOptions are used to describe how a new consumer will be created.
 type ConnectionOptions struct {
-	ReconnectInterval time.Duration
-	Logger            Logger
-	Config            Config
+	ReconnectInterval    time.Duration
+	ReconnectMaxInterval time.Duration
+	Logger               Logger
+	Config               Config
 }
 
 // getDefaultConnectionOptions describes the options that will be used when a value isn't provided
 func getDefaultConnectionOptions() ConnectionOptions {
 	return ConnectionOptions{
-		ReconnectInterval: time.Second * 5,
-		Logger:            stdDebugLogger{},
-		Config:            Config{},
+		ReconnectInterval:    time.Second * 5,
+		ReconnectMaxInterval: time.Minute,
+		Logger:               stdDebugLogger{},
+		Config:               Config{},
 	}
 }
 
@@ -22,6 +24,12 @@ func getDefaultConnectionOptions() ConnectionOptions {
 func WithConnectionOptionsReconnectInterval(interval time.Duration) func(options *ConnectionOptions) {
 	return func(options *ConnectionOptions) {
 		options.ReconnectInterval = interval
+	}
+}
+
+func WithConnectionOptionsReconnectMaxInterval(interval time.Duration) func(options *ConnectionOptions) {
+	return func(options *ConnectionOptions) {
+		options.ReconnectMaxInterval = interval
 	}
 }
 
