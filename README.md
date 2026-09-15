@@ -64,6 +64,49 @@ if err != nil {
 }
 ```
 
+## Consumer startup and buffered work
+
+`Run` blocks for the consumer's lifetime. To wait for initial subscription setup
+without waiting for the first message, run it in a goroutine and call `WaitReady`:
+
+```go
+runErr := make(chan error, 1)
+go func() { runErr <- consumer.Run(handler) }()
+
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+if err := consumer.WaitReady(ctx); err != nil {
+    // The caller decides whether to stop or keep waiting after a timeout.
+    consumer.Close()
+    return err
+}
+// This subscription is established, even if the queue is empty.
+// Keep runErr for observing Run's eventual return.
+```
+
+`WaitReady` returns the initial setup error (QoS, declarations, bindings or
+subscription) or success after `basic.consume-ok`. It can be called before `Run`
+and by multiple waiters. Canceling its context only cancels that wait. The result
+is retained across reconnects; it is not an ongoing health check.
+`WithConsumerOptionsConsumerNoWait` skips the broker acknowledgement, so
+`WaitReady` returns an error with that option.
+
+Handlers that return `Manual` after buffering deliveries can use
+`CloseWithDrain` to finish that work before the AMQP channel closes:
+
+```go
+consumer.CloseWithDrain(func() {
+    close(batchInput) // No more handlers can send to this local buffer.
+    batchWorkers.Wait() // Workers flush and Ack/Nack while the channel is open.
+})
+```
+
+`CloseWithDrain` always waits for active handlers, including when force shutdown
+is configured. The callback runs once, synchronously, as part of shutdown.
+Deliveries not admitted to handlers remain unacked until channel close requeues
+them. A finite prefetch bounds those deliveries. Network failures may still
+interrupt acknowledgements during drain.
+
 ## 🚀 Quick Start Publisher
 
 The exchange is not declared by default, that's why I recommend using the following options.

@@ -405,3 +405,88 @@ func TestConnCloseDuringReconnectStaysClosed(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+func TestConsumerReadinessAndBufferedDrain(t *testing.T) {
+	connStr := prepareDockerTest(t)
+	conn := waitForHealthyAmqp(t, connStr)
+	defer conn.Close()
+	consumer, err := NewConsumer(conn, "lifecycle", WithConsumerOptionsLogger(simpleLogF(func(string, ...interface{}) {})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer consumer.Close()
+	delivered := make(chan Delivery, 1)
+	runErr := make(chan error, 1)
+	go func() { runErr <- consumer.Run(func(d Delivery) Action { delivered <- d; return Manual }) }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := consumer.WaitReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// A different, active consumer on the queue must not make a refused
+	// exclusive subscription appear ready.
+	refused, err := NewConsumer(conn, "lifecycle", WithConsumerOptionsConsumerExclusive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusedRunErr := make(chan error, 1)
+	go func() { refusedRunErr <- refused.Run(func(Delivery) Action { return Ack }) }()
+	readyErr := refused.WaitReady(ctx)
+	refused.Close()
+	if readyErr == nil {
+		t.Fatal("exclusive subscription unexpectedly ready")
+	}
+	select {
+	case runErr := <-refusedRunErr:
+		if runErr != readyErr {
+			t.Fatalf("Run error %v differs from readiness error %v", runErr, readyErr)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	pub, err := NewPublisher(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pub.Close()
+	if err := pub.Publish([]byte("buffered"), []string{"lifecycle"}); err != nil {
+		t.Fatal(err)
+	}
+	var message Delivery
+	select {
+	case message = <-delivered:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	consumer.CloseWithDrain(func() {
+		if err := message.Ack(false); err != nil {
+			t.Errorf("ack during drain: %v", err)
+		}
+	})
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	// Ack must precede channel close, otherwise RabbitMQ requeues the message.
+	raw := conn.connectionManager.CheckoutConnection()
+	ch, err := raw.Channel()
+	conn.connectionManager.CheckinConnection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ch.Close()
+	q, err := ch.QueueDeclarePassive("lifecycle", false, false, false, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Messages != 0 || q.Consumers != 0 {
+		t.Fatalf("queue after drain: %+v", q)
+	}
+}

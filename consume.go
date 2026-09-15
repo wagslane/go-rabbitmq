@@ -35,6 +35,9 @@ type Consumer struct {
 	options                    ConsumerOptions
 	handlerMu                  *sync.RWMutex
 	closeOnce                  sync.Once
+	startupDone                chan struct{}
+	startupOnce                sync.Once
+	startupErr                 error
 
 	isClosedMu *sync.RWMutex
 	isClosed   bool
@@ -77,22 +80,28 @@ func NewConsumer(
 		handlerMu:                  &sync.RWMutex{},
 		isClosedMu:                 &sync.RWMutex{},
 		isClosed:                   false,
+		startupDone:                make(chan struct{}),
 	}
 
 	return consumer, nil
 }
 
-// Run starts consuming with automatic reconnection handling. Do not reuse the
-// consumer for anything other than to close it.
+// Run starts consuming with automatic reconnection handling. Call Run only once.
+// Use WaitReady to wait for initial setup separately from Run's lifetime.
 // Run blocks until the consumer is closed. Recovery errors after the initial
 // startup (including permanent ones like mismatched queue args) are logged
 // and retried on the next reconnect rather than returned.
 func (consumer *Consumer) Run(handler Handler) error {
 	handlerWrapper := func(d Delivery) (action Action) {
 		if !consumer.handlerMu.TryRLock() {
-			return NackRequeue
+			// Leave the delivery unacked until channel close requeues it.
+			// Nacking here can cause a hot redelivery loop during shutdown.
+			return Manual
 		}
 		defer consumer.handlerMu.RUnlock()
+		if consumer.getIsClosed() {
+			return Manual
+		}
 		return handler(d)
 	}
 
@@ -100,6 +109,7 @@ func (consumer *Consumer) Run(handler Handler) error {
 		handlerWrapper,
 		consumer.options,
 	)
+	consumer.finishStartup(err)
 	if err != nil {
 		return err
 	}
@@ -117,6 +127,41 @@ func (consumer *Consumer) Run(handler Handler) error {
 	})
 
 	return nil
+}
+
+// WaitReady waits for Run's initial setup to finish. It returns nil after this
+// consumer's QoS, declarations, bindings and basic.consume have succeeded, or
+// returns the initial setup error. Run must be called separately, usually in a
+// goroutine. WaitReady is safe to call before Run and from multiple goroutines.
+//
+// WaitReady reports initial readiness only, not current connection health. Its
+// result is retained across reconnects. Canceling ctx stops only the wait; it
+// does not stop Run or close the consumer. Closing before initial readiness
+// returns amqp.ErrClosed.
+//
+// WithConsumerOptionsConsumerNoWait is incompatible with confirmed readiness:
+// WaitReady returns an error because basic.consume-ok is not requested. Run's
+// behavior with that option is unchanged.
+func (consumer *Consumer) WaitReady(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if consumer.options.RabbitConsumerOptions.NoWait {
+		return errors.New("consumer readiness requires RabbitConsumerOptions.NoWait=false")
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-consumer.startupDone:
+		return consumer.startupErr
+	}
+}
+
+func (consumer *Consumer) finishStartup(err error) {
+	consumer.startupOnce.Do(func() {
+		consumer.startupErr = err
+		close(consumer.startupDone)
+	})
 }
 
 func (consumer *Consumer) restartOnReconnect(restart func() error) {
@@ -137,16 +182,42 @@ func (consumer *Consumer) restartOnReconnect(restart func() error) {
 // It does not close the connection manager, just the subscription
 // to the connection manager and the consuming goroutines.
 func (consumer *Consumer) Close() {
+	consumer.close(context.Background(), consumer.options.CloseGracefully, nil)
+}
+
+// CloseWithDrain stops admitting handler calls, waits for active handlers, then
+// calls drain before closing the AMQP channel. Use it when handlers hand Manual
+// deliveries to a local buffer: drain can flush that buffer and Ack or Nack its
+// deliveries while the channel is still open. Network failures can still make
+// acknowledgements fail; this is not a delivery guarantee.
+//
+// Deliveries not admitted to a handler remain unacked and are requeued when the
+// channel closes. This avoids a Nack/requeue loop while drain runs. Configure a
+// finite QOSPrefetch to bound those deliveries.
+//
+// Unlike Close with WithConsumerOptionsForceShutdown, CloseWithDrain always
+// waits for active handlers. The callback runs synchronously and may be nil.
+// Close methods share one shutdown: only the first call's callback can run.
+func (consumer *Consumer) CloseWithDrain(drain func()) {
+	consumer.close(context.Background(), true, drain)
+}
+
+func (consumer *Consumer) close(ctx context.Context, wait bool, drain func()) {
 	consumer.closeOnce.Do(func() {
-		if consumer.options.CloseGracefully {
+		consumer.isClosedMu.Lock()
+		consumer.isClosed = true
+		consumer.isClosedMu.Unlock()
+		consumer.finishStartup(amqp.ErrClosed)
+		defer consumer.cleanupResources()
+		if wait {
 			consumer.options.Logger.Infof("waiting for handler to finish...")
-			err := consumer.waitForHandlerCompletion(context.Background())
-			if err != nil {
+			if err := consumer.waitForHandlerCompletion(ctx); err != nil {
 				consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
 			}
 		}
-
-		consumer.cleanupResources()
+		if drain != nil {
+			drain()
+		}
 	})
 }
 
@@ -174,16 +245,7 @@ func (consumer *Consumer) cleanupResources() {
 // CloseWithContext does not close the connection manager, just the subscription
 // to the connection manager and the consuming goroutines.
 func (consumer *Consumer) CloseWithContext(ctx context.Context) {
-	consumer.closeOnce.Do(func() {
-		if consumer.options.CloseGracefully {
-			err := consumer.waitForHandlerCompletion(ctx)
-			if err != nil {
-				consumer.options.Logger.Warnf("error while waiting for handler to finish: %v", err)
-			}
-		}
-
-		consumer.cleanupResources()
-	})
+	consumer.close(ctx, consumer.options.CloseGracefully, nil)
 }
 
 // startGoroutines declares the queue if it doesn't exist,
@@ -195,6 +257,9 @@ func (consumer *Consumer) startGoroutines(
 ) error {
 	consumer.isClosedMu.Lock()
 	defer consumer.isClosedMu.Unlock()
+	if consumer.isClosed {
+		return amqp.ErrClosed
+	}
 	err := consumer.chanManager.QosSafe(
 		options.QOSPrefetch,
 		0,
