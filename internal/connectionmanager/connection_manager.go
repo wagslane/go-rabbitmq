@@ -129,15 +129,19 @@ func (connManager *ConnectionManager) startNotifyClose() {
 	notifyCloseChan := connManager.connection.NotifyClose(make(chan *amqp.Error, 1))
 
 	err := <-notifyCloseChan
-	if err != nil {
-		connManager.logger.Errorf("attempting to reconnect to amqp server after connection close with error: %v", err)
-		connManager.reconnectLoop()
-		connManager.logger.Warnf("successfully reconnected to amqp server")
-		connManager.dispatcher.Dispatch(err)
-	}
 	if err == nil {
-		connManager.logger.Infof("amqp connection closed gracefully")
+		select {
+		case <-connManager.done:
+			connManager.logger.Infof("amqp connection closed gracefully")
+			return
+		default:
+			err = amqp.ErrClosed
+		}
 	}
+	connManager.logger.Errorf("attempting to reconnect to amqp server after connection close with error: %v", err)
+	connManager.reconnectLoop()
+	connManager.logger.Warnf("successfully reconnected to amqp server")
+	connManager.dispatcher.Dispatch(err)
 }
 
 // GetReconnectionCount -
